@@ -932,15 +932,20 @@ end)
 -- Initial cache update
 updateLocalCache()
 
--- FPS tracker for neural network (lightweight)
+-- FPS tracker for neural network (lightweight, throttled)
 local lastFrameTime = tick()
-RunService.RenderStepped:Connect(function()
-    local currentTime = tick()
-    local deltaTime = currentTime - lastFrameTime
-    if deltaTime > 0 then
-        State.currentFPS = 1 / deltaTime
+local fpsUpdateCount = 0
+RunService.Heartbeat:Connect(function()
+    fpsUpdateCount = fpsUpdateCount + 1
+    if fpsUpdateCount >= 5 then  -- Update every 5 frames (~12 times per second)
+        local currentTime = tick()
+        local deltaTime = currentTime - lastFrameTime
+        if deltaTime > 0 then
+            State.currentFPS = (fpsUpdateCount / deltaTime)
+        end
+        lastFrameTime = currentTime
+        fpsUpdateCount = 0
     end
-    lastFrameTime = currentTime
 end)
 
 -- Notification

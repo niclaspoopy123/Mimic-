@@ -43,10 +43,10 @@ score += min(currentFPS / 60, 1) * 40
 #### Distance Component (50 points)
 ```lua
 if in_range:
-    score += 30  // In range bonus
-    score += (1 - distance/rangeDistance) * 20  // Closer is better
+    score += 30  -- In range bonus
+    score += (1 - distance/rangeDistance) * 20  -- Closer is better
 else:
-    score += max(0, 20 - (distance - rangeDistance) / 10)  // Out of range penalty
+    score += max(0, 20 - (distance - rangeDistance) / 10)  -- Out of range penalty
 ```
 - Rewards being within attack range
 - Rewards closer proximity to target
@@ -190,10 +190,10 @@ bias[i] = (math.random() - 0.5) * 0.1
 
 #### Forward Pass
 ```lua
-// Hidden layer
+-- Hidden layer
 hidden[j] = ReLU(sum(input[i] * weight_ih[i][j]) + bias_h[j])
 
-// Output layer
+-- Output layer
 output[k] = Sigmoid(sum(hidden[j] * weight_ho[j][k]) + bias_o[k])
 ```
 
