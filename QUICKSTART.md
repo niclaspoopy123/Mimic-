@@ -21,7 +21,7 @@ loadstring(game:HttpGet('https://raw.githubusercontent.com/niclaspoopy123/Mimic-
 ### Step 1: Launch the Script
 - Execute the script using your preferred method
 - Wait for the UI to load (~2-3 seconds)
-- You'll see a notification: "TSB OPTIMIZED MIMIC - Script loaded!"
+- You'll see a notification: "⚡ TSB OPTIMIZED MIMIC - Script loaded! Maximum performance enabled."
 
 ### Step 2: Select a Target
 1. Click **"🎯 Select Target (Click Player)"** button
