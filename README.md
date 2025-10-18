@@ -103,7 +103,7 @@ Predicted Position = Current Position + Velocity × Time + 0.5 × Acceleration �
 ```
 
 **Enhanced Safety Features:**
-- Dynamic bounds checking for prediction factors ≥0.45 (auto-clamped to 0.40)
+- Dynamic bounds checking for prediction time factors ≥0.45 (auto-clamped to 0.40)
 - Progressive damping for factors 0.35-0.45 (up to 30% reduction)
 - Velocity-based prediction reduction (extreme: >200, high: >100)
 - Dynamic maximum offset clamping (15-50 studs based on velocity)

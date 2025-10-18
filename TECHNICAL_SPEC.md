@@ -166,15 +166,15 @@ P(t) = Predicted position at time t
 P₀ = Current position
 V₀ = Current velocity
 a = Current acceleration
-t = Prediction factor (time delta, with bounds checking)
+t = Prediction time factor (clamped and dynamically adjusted based on velocity and conditions)
 ```
 
 **Enhanced Safety Features**:
 1. **Bounds Checking**: Prediction factors ≥0.45 are clamped to 0.40
 2. **Progressive Damping**: Factors 0.35-0.45 receive up to 30% damping
 3. **Velocity Scaling**: 
-   - Extreme velocity (>200): Prediction clamped to 0.05
-   - High velocity (>100): Prediction reduced by 30%
+   - Extreme velocity (>200 studs/s): Prediction clamped to 0.05
+   - High velocity (>100 studs/s): Prediction reduced by 30%
 4. **Dynamic Offset Clamping**: Maximum offset scales with velocity (15-50 studs)
 5. **Teleport Prevention**: Position validation with lerp smoothing for large jumps
 
