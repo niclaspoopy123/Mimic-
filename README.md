@@ -141,6 +141,11 @@ Settings are automatically saved using Rayfield's configuration system in:
 - Ensure target character exists
 - Check if you have a character spawned
 
+**Neural Network Optimizer?**
+- See detailed guide: [NEURAL_NETWORK.md](NEURAL_NETWORK.md)
+- Requires at least 5 samples before applying
+- Works best with stable FPS and active target
+
 **Performance issues?**
 - Disable range visualizer if FPS drops
 - Reduce prediction factor
