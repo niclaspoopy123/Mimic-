@@ -1,0 +1,324 @@
+-- Ultimate Mimic Script for Strongest Battlegrounds Roblox
+-- Cached HRPs, kinematic prediction with acceleration, velocity sync, jump mimicking with toggle, and minimal loop checks for battle-ready speed and accuracy.
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+
+local player = Players.LocalPlayer
+local mouse = player:GetMouse()
+
+local playerGui = player:WaitForChild("PlayerGui")
+
+local hubGui = Instance.new("ScreenGui")
+hubGui.Name = "HubGui"
+hubGui.ResetOnSpawn = false
+hubGui.Parent = playerGui
+
+local mainFrame = Instance.new("Frame")
+mainFrame.Size = UDim2.new(0, 350, 0, 500)  -- Increased height for new button
+mainFrame.Position = UDim2.new(0, 10, 0, 10)
+mainFrame.BackgroundTransparency = 0.2
+mainFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+mainFrame.BorderSizePixel = 3
+mainFrame.BorderColor3 = Color3.fromRGB(255, 255, 255)
+mainFrame.Active = true
+mainFrame.Draggable = true
+mainFrame.Parent = hubGui
+
+local titleLabel = Instance.new("TextLabel")
+titleLabel.Size = UDim2.new(1, 0, 0, 40)
+titleLabel.Position = UDim2.new(0, 0, 0, 0)
+titleLabel.Text = "Ultimate Mimic Hub - TSB"
+titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+titleLabel.BackgroundTransparency = 1
+titleLabel.Font = Enum.Font.SourceSansBold
+titleLabel.TextSize = 20
+titleLabel.Parent = mainFrame
+
+local function createButton(name, text, pos, bgColor)
+    local btn = Instance.new("TextButton")
+    btn.Name = name
+    btn.Size = UDim2.new(0.45, -5, 0, 35)
+    btn.Position = pos
+    btn.Text = text
+    btn.BackgroundColor3 = bgColor
+    btn.BorderSizePixel = 2
+    btn.BorderColor3 = Color3.fromRGB(0, 0, 0)
+    btn.Font = Enum.Font.SourceSans
+    btn.TextSize = 16
+    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    btn.Parent = mainFrame
+    return btn
+end
+
+local mimicButton = createButton("MimicButton", "Mimic", UDim2.new(0, 5, 0, 45), Color3.fromRGB(100, 100, 100))
+local stopButton = createButton("StopButton", "Stop Mimic", UDim2.new(0.55, 5, 0, 45), Color3.fromRGB(150, 50, 50))
+local respawnCheckButton = createButton("RespawnCheckButton", "Check Respawn", UDim2.new(0, 5, 0, 85), Color3.fromRGB(50, 150, 50))
+local predictionToggleButton = createButton("PredictionToggle", "Prediction: On", UDim2.new(0.55, 5, 0, 85), Color3.fromRGB(100, 100, 150))
+local teleportButton = createButton("TeleportButton", "Teleport", UDim2.new(0, 5, 0, 125), Color3.fromRGB(150, 100, 200))
+local followButton = createButton("FollowButton", "Follow: Off", UDim2.new(0.55, 5, 0, 125), Color3.fromRGB(200, 150, 50))
+local speedButton = createButton("SpeedButton", "Speed: Normal", UDim2.new(0, 5, 0, 165), Color3.fromRGB(50, 200, 150))
+local invisibleButton = createButton("InvisibleButton", "Visible", UDim2.new(0.55, 5, 0, 165), Color3.fromRGB(100, 50, 200))
+local jumpToggle = createButton("JumpToggle", "Jump Sync: On", UDim2.new(0, 5, 0, 205), Color3.fromRGB(150, 200, 50))
+local settingsToggle = createButton("SettingsToggle", "Settings", UDim2.new(0.55, 5, 0, 205), Color3.fromRGB(80, 80, 80))
+
+local settingsFrame = Instance.new("Frame")
+settingsFrame.Size = UDim2.new(1, -20, 0, 200)
+settingsFrame.Position = UDim2.new(0, 10, 0, 250)
+settingsFrame.BackgroundTransparency = 0.4
+settingsFrame.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+settingsFrame.BorderSizePixel = 1
+settingsFrame.BorderColor3 = Color3.fromRGB(200, 200, 200)
+settingsFrame.Visible = false
+settingsFrame.Parent = mainFrame
+
+local settingsTitle = Instance.new("TextLabel")
+settingsTitle.Size = UDim2.new(1, 0, 0, 30)
+settingsTitle.Position = UDim2.new(0, 0, 0, 0)
+settingsTitle.Text = "Advanced Settings"
+settingsTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+settingsTitle.BackgroundTransparency = 1
+settingsTitle.Font = Enum.Font.SourceSansBold
+settingsTitle.TextSize = 16
+settingsTitle.Parent = settingsFrame
+
+local closeButton = Instance.new("TextButton")
+closeButton.Size = UDim2.new(0, 35, 0, 35)
+closeButton.Position = UDim2.new(1, -40, 0, 0)
+closeButton.Text = "X"
+closeButton.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+closeButton.BorderSizePixel = 2
+closeButton.BorderColor3 = Color3.fromRGB(0, 0, 0)
+closeButton.Font = Enum.Font.SourceSansBold
+closeButton.TextSize = 18
+closeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+closeButton.Parent = mainFrame
+
+local mimicConnection = nil
+local currentTargetCharacter = nil
+local targetHRP = nil  -- Cached
+local localHRP = nil  -- Cached
+local isPredictionEnabled = true
+local isFollowing = false
+local isSpeedBoosted = false
+local isInvisible = false
+local isJumpSync = true
+local originalWalkSpeed = 16
+local followConnection = nil
+local previousVel = Vector3.zero  -- For acceleration calculation
+
+local function getCharacter(plr)
+    return plr and plr.Character
+end
+
+local function getHRP(char)
+    return char and char:FindFirstChild("HumanoidRootPart")
+end
+
+local function getHumanoid(char)
+    return char and char:FindFirstChild("Humanoid")
+end
+
+local function safeDisconnect(conn)
+    if conn and conn.Connected then
+        conn:Disconnect()
+    end
+end
+
+local function resetPlayerState()
+    local char = getCharacter(player)
+    local hum = getHumanoid(char)
+    if hum then
+        hum.PlatformStand = false
+        hum.WalkSpeed = originalWalkSpeed
+    end
+    if char then
+        for _, part in ipairs(char:GetDescendants()) do
+            if part:IsA("BasePart") then
+                part.Transparency = 0
+            end
+        end
+    end
+    isSpeedBoosted = false
+    isInvisible = false
+    speedButton.Text = "Speed: Normal"
+    invisibleButton.Text = "Visible"
+end
+
+local function stopMimic()
+    safeDisconnect(mimicConnection)
+    mimicConnection = nil
+    safeDisconnect(followConnection)
+    followConnection = nil
+    currentTargetCharacter = nil
+    targetHRP = nil
+    localHRP = nil
+    isFollowing = false
+    followButton.Text = "Follow: Off"
+    resetPlayerState()
+    previousVel = Vector3.zero
+end
+
+local function getPredictedPosition()
+    if not isPredictionEnabled or not targetHRP then return targetHRP.Position end
+    local dt = 0.016  -- Assuming 60 FPS
+    local acceleration = (targetHRP.AssemblyLinearVelocity - previousVel) / dt
+    local factor = 0.2  -- Prediction factor for battle
+    return targetHRP.Position + targetHRP.AssemblyLinearVelocity * factor + 0.5 * acceleration * factor * factor
+end
+
+local function mimicTarget()
+    if not targetHRP or not localHRP then return end
+    local predictedPos = getPredictedPosition()
+    local predictedCFrame = CFrame.new(predictedPos) * targetHRP.CFrame.Rotation
+    localHRP.CFrame = predictedCFrame
+    -- Sync velocity for smoother physics in combat
+    localHRP.AssemblyLinearVelocity = targetHRP.AssemblyLinearVelocity
+    previousVel = targetHRP.AssemblyLinearVelocity
+    -- Mimic jumps for battle accuracy
+    if isJumpSync then
+        local targetHum = getHumanoid(currentTargetCharacter)
+        local localHum = getHumanoid(getCharacter(player))
+        if targetHum and localHum then
+            if targetHum:GetState() == Enum.HumanoidStateType.Jumping or targetHum:GetState() == Enum.HumanoidStateType.Freefall then
+                if localHum:GetState() ~= Enum.HumanoidStateType.Jumping and localHum:GetState() ~= Enum.HumanoidStateType.Freefall then
+                    localHum:ChangeState(Enum.HumanoidStateType.Jumping)
+                end
+            end
+        end
+    end
+end
+
+local function startMimic(targetChar)
+    currentTargetCharacter = targetChar
+    targetHRP = getHRP(targetChar)
+    local char = getCharacter(player)
+    localHRP = getHRP(char)
+    local hum = getHumanoid(char)
+    if hum then
+        hum.PlatformStand = true
+    end
+    mimicConnection = RunService.RenderStepped:Connect(mimicTarget)
+end
+
+local function onCharacterAdded(newChar)
+    stopMimic()
+end
+
+player.CharacterAdded:Connect(onCharacterAdded)
+
+mimicButton.MouseButton1Click:Connect(function()
+    stopMimic()
+    mimicButton.Text = "Select Target..."
+    local conn
+    conn = mouse.Button1Down:Connect(function()
+        local target = mouse.Target
+        if target then
+            local targetChar = target:FindFirstAncestorOfClass("Model")
+            if targetChar and targetChar ~= getCharacter(player) and getHumanoid(targetChar) then
+                safeDisconnect(conn)
+                mimicButton.Text = "Mimic"
+                startMimic(targetChar)
+            end
+        end
+    end)
+end)
+
+stopButton.MouseButton1Click:Connect(stopMimic)
+
+respawnCheckButton.MouseButton1Click:Connect(function()
+    local char = getCharacter(player)
+    if char and currentTargetCharacter then
+        if char ~= getCharacter(player) then
+            stopMimic()
+            print("Respawn detected.")
+        else
+            print("No respawn.")
+        end
+    end
+end)
+
+predictionToggleButton.MouseButton1Click:Connect(function()
+    isPredictionEnabled = not isPredictionEnabled
+    predictionToggleButton.Text = isPredictionEnabled and "Prediction: On" or "Prediction: Off"
+end)
+
+teleportButton.MouseButton1Click:Connect(function()
+    if currentTargetCharacter then
+        targetHRP = getHRP(currentTargetCharacter)
+        localHRP = getHRP(getCharacter(player))
+        if targetHRP and localHRP then
+            localHRP.CFrame = targetHRP.CFrame
+        end
+    end
+end)
+
+followButton.MouseButton1Click:Connect(function()
+    if currentTargetCharacter then
+        isFollowing = not isFollowing
+        followButton.Text = isFollowing and "Follow: On" or "Follow: Off"
+        if isFollowing then
+            followConnection = RunService.RenderStepped:Connect(function()
+                if currentTargetCharacter then
+                    targetHRP = getHRP(currentTargetCharacter)
+                    localHRP = getHRP(getCharacter(player))
+                    if targetHRP and localHRP then
+                        localHRP.CFrame = targetHRP.CFrame + Vector3.new(0, 0, -5)
+                    end
+                end
+            end)
+        else
+            safeDisconnect(followConnection)
+        end
+    end
+end)
+
+speedButton.MouseButton1Click:Connect(function()
+    local hum = getHumanoid(getCharacter(player))
+    if hum then
+        if not isSpeedBoosted then
+            originalWalkSpeed = hum.WalkSpeed
+            hum.WalkSpeed = 100
+            isSpeedBoosted = true
+            speedButton.Text = "Speed: Boosted"
+        else
+            hum.WalkSpeed = originalWalkSpeed
+            isSpeedBoosted = false
+            speedButton.Text = "Speed: Normal"
+        end
+    end
+end)
+
+invisibleButton.MouseButton1Click:Connect(function()
+    local char = getCharacter(player)
+    if char then
+        isInvisible = not isInvisible
+        local trans = isInvisible and 1 or 0
+        for _, part in ipairs(char:GetDescendants()) do
+            if part:IsA("BasePart") then
+                part.Transparency = trans
+            end
+        end
+        invisibleButton.Text = isInvisible and "Invisible" or "Visible"
+    end
+end)
+
+jumpToggle.MouseButton1Click:Connect(function()
+    isJumpSync = not isJumpSync
+    jumpToggle.Text = isJumpSync and "Jump Sync: On" or "Jump Sync: Off"
+end)
+
+settingsToggle.MouseButton1Click:Connect(function()
+    settingsFrame.Visible = not settingsFrame.Visible
+end)
+
+closeButton.MouseButton1Click:Connect(function()
+    stopMimic()
+    hubGui:Destroy()
+end)
+
+local tweenInfo = TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+local tween = TweenService:Create(mainFrame, tweenInfo, {BackgroundTransparency = 0.1})
+tween:Play()
