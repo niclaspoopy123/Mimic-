@@ -205,7 +205,9 @@ local function getPredictedPosition()
     local predictedOffset = currentVel * dt + State.targetAcceleration * (0.5 * dt * dt)
     
     -- SANITY CHECK: Limit maximum prediction offset to prevent teleporting
-    local maxOffset = 30  -- Maximum 30 studs prediction offset
+    -- Dynamic max based on velocity - higher velocity = higher allowed offset (within reason)
+    local maxOffset = math.min(50, 15 + velMagnitude * 0.15)  -- Scale with velocity, cap at 50 studs
+    
     if predictedOffset.Magnitude > maxOffset then
         -- Clamp the prediction offset to reasonable bounds
         predictedOffset = predictedOffset.Unit * maxOffset
