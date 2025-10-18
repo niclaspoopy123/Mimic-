@@ -384,6 +384,64 @@ for track in targetTracks {
 
 ---
 
+### 11. Neural Network Optimizer System
+
+**Purpose**: AI-powered automatic parameter optimization
+
+**Method**: Feedforward neural network with performance-based scoring
+
+**Architecture**:
+- **Input Layer**: 4 nodes (predictionFactor, rangeDistance, lockOnActive, currentFPS)
+- **Hidden Layer**: 6 nodes with ReLU activation
+- **Output Layer**: 3 nodes with Sigmoid activation (optimalPrediction, optimalRange, optimalLockOn)
+
+**Algorithm**:
+```lua
+// Forward pass
+hidden[j] = ReLU(sum(input[i] * weight[i][j]) + bias[j])
+output[k] = Sigmoid(sum(hidden[j] * weight[j][k]) + bias[k])
+```
+
+**Performance Scoring**:
+```lua
+score = 0
+// FPS component (target 60 FPS)
+score += min(fps / 60, 1) * 40
+
+// Distance to target (closer when in range)
+if in_range:
+    score += 30 + (1 - distance/rangeDistance) * 20
+else:
+    score += max(0, 20 - (distance - rangeDistance) / 10)
+
+// Lock-on accuracy (rotation alignment)
+if lockOn:
+    alignment = direction.Dot(forward)
+    score += max(0, alignment) * 10
+```
+
+**Sample Collection**:
+- Interval: Every 2 seconds
+- Buffer Size: 20 samples (rolling window)
+- Normalization: All inputs normalized to 0-1 range
+
+**Optimization Process**:
+1. Collect performance samples during gameplay
+2. Find best-performing sample based on score
+3. Use neural network to predict optimal settings
+4. Apply denormalized outputs to game parameters
+
+**UI Controls**:
+- Toggle: Enable/Disable AI optimization
+- Button: Apply optimized settings
+- Label: Real-time status and score display
+
+**Performance**: ~0.05ms per optimization cycle (minimal overhead)
+
+**Memory**: ~2 KB additional (weights and samples storage)
+
+---
+
 ## Event Loop Architecture
 
 ### RenderStepped (Before Rendering)

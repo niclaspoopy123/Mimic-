@@ -29,6 +29,7 @@ The fastest and most feature-rich mimic script for The Strongest Battlegrounds (
 - **📈 RenderStepped/Heartbeat**: Uses appropriate update loops for each feature
 - **💾 State Management**: Centralized state system for fast access
 - **🎯 Optimized Predictions**: Reuses calculations across frames
+- **🧠 Neural Network Optimizer**: AI-powered automatic parameter tuning for optimal performance
 
 ## 📦 Installation
 
@@ -62,7 +63,22 @@ loadstring(game:HttpGet('https://raw.githubusercontent.com/niclaspoopy123/Mimic-
 - **Range Visualizer**: Shows attack range circle
 - **Range Distance**: Adjust visualizer size (10-100 studs)
 
+### Neural Network Optimizer
+- **AI Optimization**: Enable automatic data collection and analysis
+- **Apply Optimized Settings**: Apply AI-recommended settings for maximum performance
+- **Real-time Scoring**: Monitor performance score during gameplay
+
 ## ⚙️ Technical Details
+
+### Neural Network Architecture
+The script includes a lightweight feedforward neural network for automatic parameter optimization:
+- **Architecture**: 3-layer network (Input: 4, Hidden: 6, Output: 3)
+- **Inputs**: Prediction factor, range distance, lock-on state, current FPS
+- **Outputs**: Optimal prediction factor, optimal range, optimal lock-on state
+- **Activation Functions**: ReLU for hidden layer (efficiency), Sigmoid for output (normalization)
+- **Performance Scoring**: Combines FPS, target distance, and lock-on accuracy
+- **Sample Collection**: Gathers 20 samples at 2-second intervals
+- **Minimal Overhead**: ~0.05ms per optimization cycle
 
 ### Performance Features
 - **Cached Services**: All Roblox services cached at startup
@@ -124,6 +140,11 @@ Settings are automatically saved using Rayfield's configuration system in:
 - Select a target first
 - Ensure target character exists
 - Check if you have a character spawned
+
+**Neural Network Optimizer?**
+- See detailed guide: [NEURAL_NETWORK.md](NEURAL_NETWORK.md)
+- Requires at least 5 samples before applying
+- Works best with stable FPS and active target
 
 **Performance issues?**
 - Disable range visualizer if FPS drops

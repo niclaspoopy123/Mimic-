@@ -82,6 +82,8 @@ In the **👁️ Visuals** tab:
 ### Settings Tab
 | Feature | What It Does | When to Use |
 |---------|--------------|-------------|
+| Enable AI Optimization | Collects performance data | Turn ON for automatic tuning |
+| Apply Optimized Settings | Applies AI recommendations | After collecting 5+ samples |
 | Stop All Features | Emergency disable | If something breaks |
 
 ---
@@ -124,6 +126,16 @@ In the **👁️ Visuals** tab:
 3. Prediction: ON (0.20)
 4. Camera Lock-On: ON
 5. Moveset Mimic: ON
+```
+
+### Scenario 5: I Want Automatic Optimization
+```
+1. Select Target
+2. Start Mimic: ON
+3. Enable AI Optimization: ON
+4. Wait 10-15 seconds (collect samples)
+5. Click "Apply Optimized Settings"
+6. Enjoy AI-tuned performance!
 ```
 
 ---

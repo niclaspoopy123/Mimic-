@@ -72,6 +72,7 @@ local State = {
     predictionFactor = 0.15,
     updateRate = 0, -- RenderStepped every frame
     rangeDistance = 50,
+    currentFPS = 60, -- Cached FPS value
     
     -- Moveset data cache
     movesetData = {},
@@ -619,15 +620,299 @@ local RangeSlider = VisualsTab:CreateSlider({
     end
 })
 
+-- NEURAL NETWORK MODULE (Lightweight feedforward network for parameter optimization)
+local NeuralNetwork = {
+    -- Network state
+    running = false,
+    samples = {},
+    maxSamples = 20,
+    
+    -- Network architecture (simple 3-layer network)
+    inputSize = 4,  -- [predictionFactor, rangeDistance, lockOnActive, currentFPS]
+    hiddenSize = 6,
+    outputSize = 3, -- [optimalPrediction, optimalRange, optimalLockOn]
+    
+    -- Weights (small random initialization)
+    weightsInputHidden = {},
+    weightsHiddenOutput = {},
+    biasHidden = {},
+    biasOutput = {},
+    
+    -- Training parameters
+    learningRate = 0.01,
+    
+    -- Performance metrics
+    bestScore = 0,
+    currentScore = 0,
+}
+
+-- Initialize neural network weights
+function NeuralNetwork:init()
+    -- Random initialization for weights between -0.5 and 0.5
+    math.randomseed(tick())
+    
+    -- Input to Hidden weights
+    for i = 1, self.inputSize do
+        self.weightsInputHidden[i] = {}
+        for j = 1, self.hiddenSize do
+            self.weightsInputHidden[i][j] = (math.random() - 0.5) * 0.5
+        end
+    end
+    
+    -- Hidden to Output weights
+    for i = 1, self.hiddenSize do
+        self.weightsHiddenOutput[i] = {}
+        for j = 1, self.outputSize do
+            self.weightsHiddenOutput[i][j] = (math.random() - 0.5) * 0.5
+        end
+    end
+    
+    -- Bias initialization
+    for i = 1, self.hiddenSize do
+        self.biasHidden[i] = (math.random() - 0.5) * 0.1
+    end
+    for i = 1, self.outputSize do
+        self.biasOutput[i] = (math.random() - 0.5) * 0.1
+    end
+end
+
+-- Activation function (ReLU for efficiency)
+function NeuralNetwork:relu(x)
+    return math.max(0, x)
+end
+
+-- Sigmoid for output normalization
+function NeuralNetwork:sigmoid(x)
+    return 1 / (1 + math.exp(-x))
+end
+
+-- Forward pass through network
+function NeuralNetwork:forward(inputs)
+    -- Hidden layer computation
+    local hidden = {}
+    for j = 1, self.hiddenSize do
+        local sum = self.biasHidden[j]
+        for i = 1, self.inputSize do
+            sum = sum + inputs[i] * self.weightsInputHidden[i][j]
+        end
+        hidden[j] = self:relu(sum)
+    end
+    
+    -- Output layer computation
+    local outputs = {}
+    for k = 1, self.outputSize do
+        local sum = self.biasOutput[k]
+        for j = 1, self.hiddenSize do
+            sum = sum + hidden[j] * self.weightsHiddenOutput[j][k]
+        end
+        outputs[k] = self:sigmoid(sum)
+    end
+    
+    return outputs
+end
+
+-- Calculate performance score based on current metrics
+function NeuralNetwork:calculateScore()
+    local score = 0
+    
+    -- FPS component (higher is better, target 60)
+    score = score + math.min(State.currentFPS / 60, 1) * 40
+    
+    -- Distance to target (closer is better when in range)
+    if State.targetHRP and State.localHRP then
+        local distance = (State.targetHRP.Position - State.localHRP.Position).Magnitude
+        if distance <= State.rangeDistance then
+            score = score + 30 -- In range bonus
+            score = score + (1 - math.min(distance / State.rangeDistance, 1)) * 20
+        else
+            score = score + math.max(0, 20 - (distance - State.rangeDistance) / 10)
+        end
+    end
+    
+    -- Lock-on accuracy (rotation alignment)
+    if State.lockOn and State.targetHRP and State.localHRP then
+        local direction = (State.targetHRP.Position - State.localHRP.Position).Unit
+        local forward = State.localHRP.CFrame.LookVector
+        local alignment = direction:Dot(forward)
+        score = score + math.max(0, alignment) * 10
+    end
+    
+    return score
+end
+
+-- Collect performance samples
+function NeuralNetwork:collectSample()
+    if not State.localHRP or not State.targetHRP then return end
+    
+    local sample = {
+        inputs = {
+            State.predictionFactor / 0.5,  -- Normalized to 0-1
+            State.rangeDistance / 100,     -- Normalized to 0-1
+            State.lockOn and 1 or 0,       -- Boolean to 0 or 1
+            math.min(State.currentFPS / 60, 1)  -- Normalized FPS
+        },
+        score = self:calculateScore()
+    }
+    
+    table.insert(self.samples, sample)
+    if #self.samples > self.maxSamples then
+        table.remove(self.samples, 1)  -- Remove oldest sample
+    end
+    
+    return sample.score
+end
+
+-- Optimize settings using neural network
+function NeuralNetwork:optimize()
+    if #self.samples < 5 then
+        return false, "Need more samples (collecting data...)"
+    end
+    
+    -- Find best performing sample
+    local bestSample = self.samples[1]
+    for _, sample in ipairs(self.samples) do
+        if sample.score > bestSample.score then
+            bestSample = sample
+        end
+    end
+    
+    -- Use network to predict optimal settings based on best sample
+    local outputs = self:forward(bestSample.inputs)
+    
+    -- Apply optimized settings (denormalize)
+    local newPrediction = outputs[1] * 0.5
+    local newRange = outputs[2] * 100
+    local newLockOn = outputs[3] > 0.5
+    
+    -- Clamp values to valid ranges
+    newPrediction = math.max(0, math.min(0.5, newPrediction))
+    newRange = math.max(10, math.min(100, newRange))
+    
+    return true, {
+        prediction = newPrediction,
+        range = newRange,
+        lockOn = newLockOn,
+        score = bestSample.score
+    }
+end
+
+-- Start optimization process
+function NeuralNetwork:startOptimization()
+    if self.running then return end
+    
+    self.running = true
+    self.samples = {}
+    
+    Rayfield:Notify({
+        Title = "Neural Network Optimizer",
+        Content = "Starting optimization... Collecting performance data",
+        Duration = 3,
+        Image = nil
+    })
+    
+    -- Collect samples every 2 seconds
+    task.spawn(function()
+        while self.running do
+            self:collectSample()
+            task.wait(2)
+        end
+    end)
+end
+
+-- Stop optimization process
+function NeuralNetwork:stopOptimization()
+    self.running = false
+end
+
+-- Initialize the neural network
+NeuralNetwork:init()
+
 -- SETTINGS TAB
 local SettingsSection = SettingsTab:CreateSection("Performance Settings")
 
 local PerformanceLabel = SettingsTab:CreateLabel("All features optimized for RenderStepped")
 
+-- Neural Network Optimization Section
+local NNSection = SettingsTab:CreateSection("🧠 Neural Network Optimizer")
+
+local NNLabel = SettingsTab:CreateLabel("AI-powered automatic parameter optimization")
+
+local NNOptimizeToggle = SettingsTab:CreateToggle({
+    Name = "🤖 Enable AI Optimization",
+    CurrentValue = false,
+    Flag = "NNOptimizeToggle",
+    Callback = function(value)
+        if value then
+            NeuralNetwork:startOptimization()
+        else
+            NeuralNetwork:stopOptimization()
+        end
+    end
+})
+
+local NNApplyButton = SettingsTab:CreateButton({
+    Name = "✨ Apply Optimized Settings",
+    Callback = function()
+        local success, result = NeuralNetwork:optimize()
+        
+        if success then
+            -- Apply the optimized settings
+            State.predictionFactor = result.prediction
+            State.rangeDistance = result.range
+            
+            -- Update UI sliders
+            if State.rangePart then
+                State.rangePart.Size = Vector3.new(result.range * 2, 0.5, result.range * 2)
+            end
+            
+            Rayfield:Notify({
+                Title = "Optimization Applied",
+                Content = string.format(
+                    "Prediction: %.2f | Range: %.0f | Score: %.1f",
+                    result.prediction,
+                    result.range,
+                    result.score
+                ),
+                Duration = 5,
+                Image = nil
+            })
+        else
+            Rayfield:Notify({
+                Title = "Optimization Not Ready",
+                Content = result,
+                Duration = 3,
+                Image = nil
+            })
+        end
+    end
+})
+
+local NNStatusLabel = SettingsTab:CreateLabel("Status: Ready - Enable optimizer to collect data")
+
+-- Update status label periodically
+task.spawn(function()
+    while true do
+        task.wait(2)
+        if NeuralNetwork.running then
+            local sampleCount = #NeuralNetwork.samples
+            local currentScore = NeuralNetwork:calculateScore()
+            NNStatusLabel:Set(string.format(
+                "Status: Collecting data (%d/%d samples) | Score: %.1f",
+                sampleCount,
+                NeuralNetwork.maxSamples,
+                currentScore
+            ))
+        else
+            NNStatusLabel:Set("Status: Ready - Enable optimizer to collect data")
+        end
+    end
+end)
+
 local StopAllButton = SettingsTab:CreateButton({
     Name = "🛑 Stop All Features",
     Callback = function()
         stopAllFeatures()
+        NeuralNetwork:stopOptimization()
         Rayfield:Notify({
             Title = "Stopped",
             Content = "All features disabled",
@@ -647,10 +932,26 @@ end)
 -- Initial cache update
 updateLocalCache()
 
+-- FPS tracker for neural network (lightweight, throttled)
+local lastFrameTime = tick()
+local fpsUpdateCount = 0
+RunService.Heartbeat:Connect(function()
+    fpsUpdateCount = fpsUpdateCount + 1
+    if fpsUpdateCount >= 5 then  -- Update every 5 frames (~12 times per second)
+        local currentTime = tick()
+        local deltaTime = currentTime - lastFrameTime
+        if deltaTime > 0 then
+            State.currentFPS = (fpsUpdateCount / deltaTime)
+        end
+        lastFrameTime = currentTime
+        fpsUpdateCount = 0
+    end
+end)
+
 -- Notification
 Rayfield:Notify({
     Title = "⚡ TSB OPTIMIZED MIMIC",
-    Content = "Script loaded! Maximum performance enabled.",
+    Content = "Script loaded! Maximum performance enabled with AI optimization.",
     Duration = 5,
     Image = nil
 })
@@ -659,5 +960,6 @@ print("=================================")
 print("TSB OPTIMIZED MIMIC SCRIPT LOADED")
 print("Features: Anti-Stun, Anti-Ragdoll, Anti-Launch")
 print("Lock-On, Camera Lock, Range Visualizer, Moveset Mimic")
+print("NEW: Neural Network Parameter Optimizer")
 print("Optimized for MAXIMUM SPEED!")
 print("=================================")

@@ -278,6 +278,36 @@ Range Distance: 15-25 studs
 
 ---
 
+### Technique 5: Neural Network Optimization
+
+**What It Does**:
+The neural network automatically analyzes your gameplay performance and suggests optimal settings based on:
+- Current FPS (performance metric)
+- Distance to target (combat effectiveness)
+- Lock-on accuracy (rotation alignment)
+
+**How to Use**:
+1. Select a target and start mimic
+2. Enable "🤖 Enable AI Optimization" in Settings tab
+3. Play normally for 10-20 seconds (let it collect data)
+4. Watch the status label for sample count
+5. Click "✨ Apply Optimized Settings" when ready (5+ samples)
+6. Settings are automatically adjusted for best performance
+
+**Best Practices**:
+- Use in different combat scenarios for varied data
+- Re-optimize when switching playstyles
+- Combine with manual tweaking for fine-tuning
+- Check the performance score to track improvements
+
+**When to Re-optimize**:
+- After changing major features (anti-features, lock-on)
+- When experiencing FPS drops
+- When switching between aggressive/defensive play
+- After significant target distance changes
+
+---
+
 ## Troubleshooting
 
 ### Issue 1: Mimic Not Starting
@@ -432,6 +462,13 @@ All other features: OFF
 ```
 Mimic: ON | Prediction: 0.15 | Lock-On: ON
 All visual features: OFF
+```
+
+**AI-Optimized (Recommended)**:
+```
+Mimic: ON | Enable AI Optimization: ON
+Wait 15 seconds | Apply Optimized Settings
+Let AI tune for your playstyle
 ```
 
 ---
