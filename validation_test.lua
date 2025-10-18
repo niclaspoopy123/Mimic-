@@ -4,6 +4,11 @@
 print("=== Enhanced Neural Network Validation Test ===")
 print("")
 
+-- Configuration constants
+local TRAINING_SAMPLES = 100
+local LOCK_ON_PROBABILITY = 0.3  -- 70% chance lock-on is beneficial (1 - 0.3)
+local TEST_SEED = 12345  -- Fixed seed for reproducible testing; use os.time() for randomness
+
 -- Mock the neural network module (simplified version for testing)
 local NeuralNetwork = {
     inputSize = 4,
@@ -58,7 +63,7 @@ end
 
 -- Initialize weights with He/Xavier
 function NeuralNetwork:init()
-    math.randomseed(12345)  -- Fixed seed for reproducibility
+    math.randomseed(TEST_SEED)  -- Use configuration constant for testing
     
     -- He initialization for Layer 1
     local heScale1 = math.sqrt(2.0 / self.inputSize)
@@ -168,7 +173,7 @@ end
 function NeuralNetwork:generateSimulatedData()
     self.trainingData = {}
     
-    for i = 1, 100 do
+    for i = 1, TRAINING_SAMPLES do
         local predFactor = math.random() * 0.5
         local range = 10 + math.random() * 90
         local lockOn = math.random() > 0.5 and 1 or 0
@@ -195,7 +200,7 @@ function NeuralNetwork:generateSimulatedData()
             optimalRange = 30 + math.random() * 30
         end
         
-        optimalLockOn = math.random() > 0.3 and 1 or 0
+        optimalLockOn = math.random() > LOCK_ON_PROBABILITY and 1 or 0
         
         local outputs = {
             optimalPred / 0.5,
@@ -358,8 +363,16 @@ print("✓ Prediction successful")
 print("")
 
 print("Test 7: Network Complexity")
-local totalParams = (4 * 8) + (8 * 8) + (8 * 4) + (4 * 3) + 8 + 8 + 4 + 3
-print("Total parameters: " .. totalParams .. " (140 weights + 23 biases)")
+-- Calculate total parameters dynamically from network architecture
+local totalWeights = (NeuralNetwork.inputSize * NeuralNetwork.hiddenSize1) + 
+                     (NeuralNetwork.hiddenSize1 * NeuralNetwork.hiddenSize2) + 
+                     (NeuralNetwork.hiddenSize2 * NeuralNetwork.hiddenSize3) + 
+                     (NeuralNetwork.hiddenSize3 * NeuralNetwork.outputSize)
+local totalBiases = NeuralNetwork.hiddenSize1 + NeuralNetwork.hiddenSize2 + 
+                    NeuralNetwork.hiddenSize3 + NeuralNetwork.outputSize
+local totalParams = totalWeights + totalBiases
+print(string.format("Total parameters: %d (%d weights + %d biases)", 
+    totalParams, totalWeights, totalBiases))
 print("✓ Architecture complexity verified")
 print("")
 
