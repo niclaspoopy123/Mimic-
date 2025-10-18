@@ -1,324 +1,663 @@
--- Ultimate Mimic Script for Strongest Battlegrounds Roblox
--- Cached HRPs, kinematic prediction with acceleration, velocity sync, jump mimicking with toggle, and minimal loop checks for battle-ready speed and accuracy.
+-- OPTIMIZED TSB MIMIC SCRIPT - MAXIMUM PERFORMANCE
+-- Features: Anti-stun, Anti-ragdoll, Anti-launch, Lock-on, Camera Lock, Range Visualizer, Moveset Mimic
+-- Optimized for minimal latency with cached values and efficient RenderStepped loops
 
+-- Services - Cached once
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
-local TweenService = game:GetService("TweenService")
+local Workspace = game:GetService("Workspace")
+local Camera = Workspace.CurrentCamera
 
+-- Player references - Cached
 local player = Players.LocalPlayer
 local mouse = player:GetMouse()
 
-local playerGui = player:WaitForChild("PlayerGui")
+-- Load Rayfield UI Library
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
-local hubGui = Instance.new("ScreenGui")
-hubGui.Name = "HubGui"
-hubGui.ResetOnSpawn = false
-hubGui.Parent = playerGui
+-- Create optimized window
+local Window = Rayfield:CreateWindow({
+    Name = "⚡ TSB OPTIMIZED MIMIC HUB",
+    LoadingTitle = "Loading Optimized Script...",
+    LoadingSubtitle = "by Optimized Performance Team",
+    ConfigurationSaving = {
+        Enabled = true,
+        FolderName = nil,
+        FileName = "TSBMimicOptimized"
+    },
+    Discord = {
+        Enabled = false
+    },
+    KeySystem = false
+})
 
-local mainFrame = Instance.new("Frame")
-mainFrame.Size = UDim2.new(0, 350, 0, 500)  -- Increased height for new button
-mainFrame.Position = UDim2.new(0, 10, 0, 10)
-mainFrame.BackgroundTransparency = 0.2
-mainFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-mainFrame.BorderSizePixel = 3
-mainFrame.BorderColor3 = Color3.fromRGB(255, 255, 255)
-mainFrame.Active = true
-mainFrame.Draggable = true
-mainFrame.Parent = hubGui
+-- Performance state - All cached for speed
+local State = {
+    -- Target data
+    targetChar = nil,
+    targetHRP = nil,
+    targetHumanoid = nil,
+    targetLastPos = Vector3.zero,
+    targetVelocity = Vector3.zero,
+    targetAcceleration = Vector3.zero,
+    
+    -- Local data
+    localChar = nil,
+    localHRP = nil,
+    localHumanoid = nil,
+    
+    -- Connections
+    mimicConn = nil,
+    antiStunConn = nil,
+    antiRagdollConn = nil,
+    antiLaunchConn = nil,
+    lockOnConn = nil,
+    cameraLockConn = nil,
+    movesetConn = nil,
+    rangeUpdateConn = nil,
+    
+    -- Feature toggles
+    mimicEnabled = false,
+    antiStun = false,
+    antiRagdoll = false,
+    antiLaunch = false,
+    lockOn = false,
+    cameraLock = false,
+    movesetMimic = false,
+    rangeViz = false,
+    prediction = true,
+    
+    -- Performance settings
+    predictionFactor = 0.15,
+    updateRate = 0, -- RenderStepped every frame
+    rangeDistance = 50,
+    
+    -- Moveset data cache
+    movesetData = {},
+    lastMoveTime = 0,
+    moveCooldown = 0.1,
+    
+    -- Range visualizer
+    rangePart = nil
+}
 
-local titleLabel = Instance.new("TextLabel")
-titleLabel.Size = UDim2.new(1, 0, 0, 40)
-titleLabel.Position = UDim2.new(0, 0, 0, 0)
-titleLabel.Text = "Ultimate Mimic Hub - TSB"
-titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-titleLabel.BackgroundTransparency = 1
-titleLabel.Font = Enum.Font.SourceSansBold
-titleLabel.TextSize = 20
-titleLabel.Parent = mainFrame
-
-local function createButton(name, text, pos, bgColor)
-    local btn = Instance.new("TextButton")
-    btn.Name = name
-    btn.Size = UDim2.new(0.45, -5, 0, 35)
-    btn.Position = pos
-    btn.Text = text
-    btn.BackgroundColor3 = bgColor
-    btn.BorderSizePixel = 2
-    btn.BorderColor3 = Color3.fromRGB(0, 0, 0)
-    btn.Font = Enum.Font.SourceSans
-    btn.TextSize = 16
-    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    btn.Parent = mainFrame
-    return btn
-end
-
-local mimicButton = createButton("MimicButton", "Mimic", UDim2.new(0, 5, 0, 45), Color3.fromRGB(100, 100, 100))
-local stopButton = createButton("StopButton", "Stop Mimic", UDim2.new(0.55, 5, 0, 45), Color3.fromRGB(150, 50, 50))
-local respawnCheckButton = createButton("RespawnCheckButton", "Check Respawn", UDim2.new(0, 5, 0, 85), Color3.fromRGB(50, 150, 50))
-local predictionToggleButton = createButton("PredictionToggle", "Prediction: On", UDim2.new(0.55, 5, 0, 85), Color3.fromRGB(100, 100, 150))
-local teleportButton = createButton("TeleportButton", "Teleport", UDim2.new(0, 5, 0, 125), Color3.fromRGB(150, 100, 200))
-local followButton = createButton("FollowButton", "Follow: Off", UDim2.new(0.55, 5, 0, 125), Color3.fromRGB(200, 150, 50))
-local speedButton = createButton("SpeedButton", "Speed: Normal", UDim2.new(0, 5, 0, 165), Color3.fromRGB(50, 200, 150))
-local invisibleButton = createButton("InvisibleButton", "Visible", UDim2.new(0.55, 5, 0, 165), Color3.fromRGB(100, 50, 200))
-local jumpToggle = createButton("JumpToggle", "Jump Sync: On", UDim2.new(0, 5, 0, 205), Color3.fromRGB(150, 200, 50))
-local settingsToggle = createButton("SettingsToggle", "Settings", UDim2.new(0.55, 5, 0, 205), Color3.fromRGB(80, 80, 80))
-
-local settingsFrame = Instance.new("Frame")
-settingsFrame.Size = UDim2.new(1, -20, 0, 200)
-settingsFrame.Position = UDim2.new(0, 10, 0, 250)
-settingsFrame.BackgroundTransparency = 0.4
-settingsFrame.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
-settingsFrame.BorderSizePixel = 1
-settingsFrame.BorderColor3 = Color3.fromRGB(200, 200, 200)
-settingsFrame.Visible = false
-settingsFrame.Parent = mainFrame
-
-local settingsTitle = Instance.new("TextLabel")
-settingsTitle.Size = UDim2.new(1, 0, 0, 30)
-settingsTitle.Position = UDim2.new(0, 0, 0, 0)
-settingsTitle.Text = "Advanced Settings"
-settingsTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
-settingsTitle.BackgroundTransparency = 1
-settingsTitle.Font = Enum.Font.SourceSansBold
-settingsTitle.TextSize = 16
-settingsTitle.Parent = settingsFrame
-
-local closeButton = Instance.new("TextButton")
-closeButton.Size = UDim2.new(0, 35, 0, 35)
-closeButton.Position = UDim2.new(1, -40, 0, 0)
-closeButton.Text = "X"
-closeButton.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
-closeButton.BorderSizePixel = 2
-closeButton.BorderColor3 = Color3.fromRGB(0, 0, 0)
-closeButton.Font = Enum.Font.SourceSansBold
-closeButton.TextSize = 18
-closeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-closeButton.Parent = mainFrame
-
-local mimicConnection = nil
-local currentTargetCharacter = nil
-local targetHRP = nil  -- Cached
-local localHRP = nil  -- Cached
-local isPredictionEnabled = true
-local isFollowing = false
-local isSpeedBoosted = false
-local isInvisible = false
-local isJumpSync = true
-local originalWalkSpeed = 16
-local followConnection = nil
-local previousVel = Vector3.zero  -- For acceleration calculation
-
-local function getCharacter(plr)
-    return plr and plr.Character
-end
-
-local function getHRP(char)
-    return char and char:FindFirstChild("HumanoidRootPart")
-end
-
-local function getHumanoid(char)
-    return char and char:FindFirstChild("Humanoid")
-end
-
+-- Optimized utility functions (minimal overhead)
 local function safeDisconnect(conn)
-    if conn and conn.Connected then
-        conn:Disconnect()
+    if conn then pcall(function() conn:Disconnect() end) end
+end
+
+local function updateLocalCache()
+    State.localChar = player.Character
+    if State.localChar then
+        State.localHRP = State.localChar:FindFirstChild("HumanoidRootPart")
+        State.localHumanoid = State.localChar:FindFirstChild("Humanoid")
     end
 end
 
-local function resetPlayerState()
-    local char = getCharacter(player)
-    local hum = getHumanoid(char)
-    if hum then
-        hum.PlatformStand = false
-        hum.WalkSpeed = originalWalkSpeed
+local function updateTargetCache()
+    if State.targetChar then
+        State.targetHRP = State.targetChar:FindFirstChild("HumanoidRootPart")
+        State.targetHumanoid = State.targetChar:FindFirstChild("Humanoid")
     end
-    if char then
-        for _, part in ipairs(char:GetDescendants()) do
-            if part:IsA("BasePart") then
-                part.Transparency = 0
-            end
+end
+
+-- ANTI-STUN (Prevents stun states)
+local function setupAntiStun()
+    if State.antiStunConn then return end
+    
+    State.antiStunConn = RunService.Heartbeat:Connect(function()
+        if not State.localHumanoid then updateLocalCache() return end
+        
+        -- Fast state check and reset
+        local state = State.localHumanoid:GetState()
+        if state == Enum.HumanoidStateType.Strafing or 
+           state == Enum.HumanoidStateType.FallingDown or
+           state == Enum.HumanoidStateType.Ragdoll then
+            State.localHumanoid:ChangeState(Enum.HumanoidStateType.Running)
         end
-    end
-    isSpeedBoosted = false
-    isInvisible = false
-    speedButton.Text = "Speed: Normal"
-    invisibleButton.Text = "Visible"
+    end)
 end
 
-local function stopMimic()
-    safeDisconnect(mimicConnection)
-    mimicConnection = nil
-    safeDisconnect(followConnection)
-    followConnection = nil
-    currentTargetCharacter = nil
-    targetHRP = nil
-    localHRP = nil
-    isFollowing = false
-    followButton.Text = "Follow: Off"
-    resetPlayerState()
-    previousVel = Vector3.zero
+-- ANTI-RAGDOLL (Prevents ragdoll physics)
+local function setupAntiRagdoll()
+    if State.antiRagdollConn then return end
+    
+    State.antiRagdollConn = RunService.Heartbeat:Connect(function()
+        if not State.localHumanoid then updateLocalCache() return end
+        
+        -- Keep platform stand disabled
+        if State.localHumanoid.PlatformStand and not State.mimicEnabled then
+            State.localHumanoid.PlatformStand = false
+        end
+        
+        -- Reset sit state
+        if State.localHumanoid.Sit then
+            State.localHumanoid.Sit = false
+        end
+    end)
 end
 
+-- ANTI-LAUNCH (Prevents being launched/knocked back)
+local function setupAntiLaunch()
+    if State.antiLaunchConn then return end
+    
+    State.antiLaunchConn = RunService.Heartbeat:Connect(function()
+        if not State.localHRP then updateLocalCache() return end
+        
+        -- Clamp velocity to prevent launches
+        local vel = State.localHRP.AssemblyLinearVelocity
+        if vel.Magnitude > 100 and not State.mimicEnabled then
+            State.localHRP.AssemblyLinearVelocity = vel.Unit * 100
+        end
+        
+        -- Keep grounded
+        if State.localHRP.AssemblyLinearVelocity.Y > 50 and not State.mimicEnabled then
+            State.localHRP.AssemblyLinearVelocity = Vector3.new(
+                State.localHRP.AssemblyLinearVelocity.X,
+                math.min(State.localHRP.AssemblyLinearVelocity.Y, 50),
+                State.localHRP.AssemblyLinearVelocity.Z
+            )
+        end
+    end)
+end
+
+-- OPTIMIZED PREDICTION (Cached calculations)
 local function getPredictedPosition()
-    if not isPredictionEnabled or not targetHRP then return targetHRP.Position end
-    local dt = 0.016  -- Assuming 60 FPS
-    local acceleration = (targetHRP.AssemblyLinearVelocity - previousVel) / dt
-    local factor = 0.2  -- Prediction factor for battle
-    return targetHRP.Position + targetHRP.AssemblyLinearVelocity * factor + 0.5 * acceleration * factor * factor
-end
-
-local function mimicTarget()
-    if not targetHRP or not localHRP then return end
-    local predictedPos = getPredictedPosition()
-    local predictedCFrame = CFrame.new(predictedPos) * targetHRP.CFrame.Rotation
-    localHRP.CFrame = predictedCFrame
-    -- Sync velocity for smoother physics in combat
-    localHRP.AssemblyLinearVelocity = targetHRP.AssemblyLinearVelocity
-    previousVel = targetHRP.AssemblyLinearVelocity
-    -- Mimic jumps for battle accuracy
-    if isJumpSync then
-        local targetHum = getHumanoid(currentTargetCharacter)
-        local localHum = getHumanoid(getCharacter(player))
-        if targetHum and localHum then
-            if targetHum:GetState() == Enum.HumanoidStateType.Jumping or targetHum:GetState() == Enum.HumanoidStateType.Freefall then
-                if localHum:GetState() ~= Enum.HumanoidStateType.Jumping and localHum:GetState() ~= Enum.HumanoidStateType.Freefall then
-                    localHum:ChangeState(Enum.HumanoidStateType.Jumping)
-                end
-            end
-        end
+    if not State.prediction or not State.targetHRP then 
+        return State.targetHRP and State.targetHRP.Position or Vector3.zero
     end
+    
+    -- Use cached velocity and acceleration
+    local currentVel = State.targetHRP.AssemblyLinearVelocity
+    local dt = State.predictionFactor
+    
+    -- Update acceleration (cached from last frame)
+    State.targetAcceleration = (currentVel - State.targetVelocity) / 0.016
+    State.targetVelocity = currentVel
+    
+    -- Kinematic prediction: p = p0 + v*t + 0.5*a*t^2
+    return State.targetHRP.Position + 
+           currentVel * dt + 
+           State.targetAcceleration * (0.5 * dt * dt)
 end
 
-local function startMimic(targetChar)
-    currentTargetCharacter = targetChar
-    targetHRP = getHRP(targetChar)
-    local char = getCharacter(player)
-    localHRP = getHRP(char)
-    local hum = getHumanoid(char)
-    if hum then
-        hum.PlatformStand = true
-    end
-    mimicConnection = RunService.RenderStepped:Connect(mimicTarget)
+-- LOCK-ON SYSTEM (Smooth target tracking)
+local function setupLockOn()
+    if State.lockOnConn then return end
+    
+    State.lockOnConn = RunService.RenderStepped:Connect(function()
+        if not State.targetHRP or not State.localHRP then return end
+        
+        -- Calculate direction to target
+        local direction = (State.targetHRP.Position - State.localHRP.Position).Unit
+        local lookCFrame = CFrame.lookAt(State.localHRP.Position, State.targetHRP.Position)
+        
+        -- Smooth rotation lock-on
+        State.localHRP.CFrame = CFrame.new(State.localHRP.Position) * 
+                                 (State.localHRP.CFrame.Rotation:Lerp(lookCFrame.Rotation, 0.3))
+    end)
 end
 
-local function onCharacterAdded(newChar)
-    stopMimic()
+-- CAMERA LOCK-ON (Camera follows target)
+local function setupCameraLock()
+    if State.cameraLockConn then return end
+    
+    State.cameraLockConn = RunService.RenderStepped:Connect(function()
+        if not State.targetHRP then return end
+        
+        -- Lock camera to target
+        Camera.CameraType = Enum.CameraType.Scriptable
+        Camera.CFrame = CFrame.lookAt(Camera.CFrame.Position, State.targetHRP.Position)
+    end)
 end
 
-player.CharacterAdded:Connect(onCharacterAdded)
+local function disableCameraLock()
+    Camera.CameraType = Enum.CameraType.Custom
+end
 
-mimicButton.MouseButton1Click:Connect(function()
-    stopMimic()
-    mimicButton.Text = "Select Target..."
-    local conn
-    conn = mouse.Button1Down:Connect(function()
-        local target = mouse.Target
-        if target then
-            local targetChar = target:FindFirstAncestorOfClass("Model")
-            if targetChar and targetChar ~= getCharacter(player) and getHumanoid(targetChar) then
-                safeDisconnect(conn)
-                mimicButton.Text = "Mimic"
-                startMimic(targetChar)
+-- RANGE VISUALIZER (Shows attack range)
+local function createRangeVisualizer()
+    if State.rangePart then State.rangePart:Destroy() end
+    
+    State.rangePart = Instance.new("Part")
+    State.rangePart.Name = "RangeVisualizer"
+    State.rangePart.Size = Vector3.new(State.rangeDistance * 2, 0.5, State.rangeDistance * 2)
+    State.rangePart.Transparency = 0.7
+    State.rangePart.CanCollide = false
+    State.rangePart.Anchored = true
+    State.rangePart.Color = Color3.fromRGB(255, 100, 100)
+    State.rangePart.Material = Enum.Material.Neon
+    State.rangePart.Parent = Workspace
+    
+    -- Add cylinder mesh for better visuals
+    local mesh = Instance.new("CylinderMesh")
+    mesh.Parent = State.rangePart
+end
+
+local function updateRangeVisualizer()
+    if State.rangeUpdateConn then return end
+    
+    State.rangeUpdateConn = RunService.Heartbeat:Connect(function()
+        if not State.rangeViz or not State.localHRP or not State.rangePart then return end
+        
+        State.rangePart.Position = State.localHRP.Position
+        
+        -- Color based on target distance
+        if State.targetHRP then
+            local distance = (State.targetHRP.Position - State.localHRP.Position).Magnitude
+            if distance <= State.rangeDistance then
+                State.rangePart.Color = Color3.fromRGB(100, 255, 100) -- Green in range
+            else
+                State.rangePart.Color = Color3.fromRGB(255, 100, 100) -- Red out of range
             end
         end
     end)
-end)
+end
 
-stopButton.MouseButton1Click:Connect(stopMimic)
-
-respawnCheckButton.MouseButton1Click:Connect(function()
-    local char = getCharacter(player)
-    if char and currentTargetCharacter then
-        if char ~= getCharacter(player) then
-            stopMimic()
-            print("Respawn detected.")
-        else
-            print("No respawn.")
-        end
-    end
-end)
-
-predictionToggleButton.MouseButton1Click:Connect(function()
-    isPredictionEnabled = not isPredictionEnabled
-    predictionToggleButton.Text = isPredictionEnabled and "Prediction: On" or "Prediction: Off"
-end)
-
-teleportButton.MouseButton1Click:Connect(function()
-    if currentTargetCharacter then
-        targetHRP = getHRP(currentTargetCharacter)
-        localHRP = getHRP(getCharacter(player))
-        if targetHRP and localHRP then
-            localHRP.CFrame = targetHRP.CFrame
-        end
-    end
-end)
-
-followButton.MouseButton1Click:Connect(function()
-    if currentTargetCharacter then
-        isFollowing = not isFollowing
-        followButton.Text = isFollowing and "Follow: On" or "Follow: Off"
-        if isFollowing then
-            followConnection = RunService.RenderStepped:Connect(function()
-                if currentTargetCharacter then
-                    targetHRP = getHRP(currentTargetCharacter)
-                    localHRP = getHRP(getCharacter(player))
-                    if targetHRP and localHRP then
-                        localHRP.CFrame = targetHRP.CFrame + Vector3.new(0, 0, -5)
+-- MOVESET MIMIC (Replicates target's moves)
+local function setupMovesetMimic()
+    if State.movesetConn then return end
+    
+    State.movesetConn = RunService.Heartbeat:Connect(function()
+        if not State.targetChar or not State.localChar then return end
+        
+        local currentTime = tick()
+        if currentTime - State.lastMoveTime < State.moveCooldown then return end
+        
+        -- Detect and mimic combat animations
+        local targetAnimator = State.targetChar:FindFirstChild("Humanoid")
+        if targetAnimator then
+            local targetTracks = targetAnimator:GetPlayingAnimationTracks()
+            local localAnimator = State.localHumanoid
+            
+            if localAnimator then
+                for _, track in ipairs(targetTracks) do
+                    -- Check if it's a combat animation (common TSB move patterns)
+                    local animName = track.Animation.AnimationId
+                    if animName:find("punch") or animName:find("kick") or 
+                       animName:find("attack") or animName:find("skill") then
+                        
+                        -- Try to play same animation on local character
+                        if not State.movesetData[animName] then
+                            State.movesetData[animName] = track.Animation
+                        end
+                        
+                        -- Load and play animation
+                        pcall(function()
+                            local anim = localAnimator:LoadAnimation(State.movesetData[animName])
+                            anim:Play()
+                        end)
+                        
+                        State.lastMoveTime = currentTime
+                        break
                     end
                 end
-            end)
-        else
-            safeDisconnect(followConnection)
-        end
-    end
-end)
-
-speedButton.MouseButton1Click:Connect(function()
-    local hum = getHumanoid(getCharacter(player))
-    if hum then
-        if not isSpeedBoosted then
-            originalWalkSpeed = hum.WalkSpeed
-            hum.WalkSpeed = 100
-            isSpeedBoosted = true
-            speedButton.Text = "Speed: Boosted"
-        else
-            hum.WalkSpeed = originalWalkSpeed
-            isSpeedBoosted = false
-            speedButton.Text = "Speed: Normal"
-        end
-    end
-end)
-
-invisibleButton.MouseButton1Click:Connect(function()
-    local char = getCharacter(player)
-    if char then
-        isInvisible = not isInvisible
-        local trans = isInvisible and 1 or 0
-        for _, part in ipairs(char:GetDescendants()) do
-            if part:IsA("BasePart") then
-                part.Transparency = trans
             end
         end
-        invisibleButton.Text = isInvisible and "Invisible" or "Visible"
+    end)
+end
+
+-- CORE MIMIC FUNCTION (Maximum optimization)
+local function mimicCore()
+    if not State.targetHRP or not State.localHRP then 
+        updateTargetCache()
+        updateLocalCache()
+        return 
     end
+    
+    -- Get predicted position (using cached calculations)
+    local predictedPos = getPredictedPosition()
+    
+    -- Apply position and rotation in one operation
+    State.localHRP.CFrame = CFrame.new(predictedPos) * State.targetHRP.CFrame.Rotation
+    
+    -- Sync velocity for smooth physics
+    State.localHRP.AssemblyLinearVelocity = State.targetHRP.AssemblyLinearVelocity
+    
+    -- Sync angular velocity for rotation matching
+    State.localHRP.AssemblyAngularVelocity = State.targetHRP.AssemblyAngularVelocity
+    
+    -- Jump state synchronization
+    if State.targetHumanoid and State.localHumanoid then
+        local targetState = State.targetHumanoid:GetState()
+        if targetState == Enum.HumanoidStateType.Jumping or 
+           targetState == Enum.HumanoidStateType.Freefall then
+            local localState = State.localHumanoid:GetState()
+            if localState ~= Enum.HumanoidStateType.Jumping and 
+               localState ~= Enum.HumanoidStateType.Freefall then
+                State.localHumanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+            end
+        end
+    end
+end
+
+-- START MIMIC (Optimized initialization)
+local function startMimic(targetChar)
+    if State.mimicConn then safeDisconnect(State.mimicConn) end
+    
+    State.targetChar = targetChar
+    updateTargetCache()
+    updateLocalCache()
+    
+    if not State.targetHRP or not State.localHRP then return end
+    
+    -- Enable platform stand for smooth mimicking
+    if State.localHumanoid then
+        State.localHumanoid.PlatformStand = true
+    end
+    
+    State.mimicEnabled = true
+    
+    -- Use RenderStepped for fastest possible updates
+    State.mimicConn = RunService.RenderStepped:Connect(mimicCore)
+end
+
+-- STOP ALL FUNCTIONS
+local function stopAllFeatures()
+    -- Disconnect all connections
+    safeDisconnect(State.mimicConn)
+    safeDisconnect(State.antiStunConn)
+    safeDisconnect(State.antiRagdollConn)
+    safeDisconnect(State.antiLaunchConn)
+    safeDisconnect(State.lockOnConn)
+    safeDisconnect(State.cameraLockConn)
+    safeDisconnect(State.movesetConn)
+    safeDisconnect(State.rangeUpdateConn)
+    
+    -- Reset state
+    State.mimicConn = nil
+    State.antiStunConn = nil
+    State.antiRagdollConn = nil
+    State.antiLaunchConn = nil
+    State.lockOnConn = nil
+    State.cameraLockConn = nil
+    State.movesetConn = nil
+    State.rangeUpdateConn = nil
+    State.mimicEnabled = false
+    
+    -- Clean up visualizer
+    if State.rangePart then
+        State.rangePart:Destroy()
+        State.rangePart = nil
+    end
+    
+    -- Reset character
+    updateLocalCache()
+    if State.localHumanoid then
+        State.localHumanoid.PlatformStand = false
+    end
+    
+    disableCameraLock()
+end
+
+-- UI TABS
+local MainTab = Window:CreateTab("🎯 Main", nil)
+local CombatTab = Window:CreateTab("⚔️ Combat", nil)
+local VisualsTab = Window:CreateTab("👁️ Visuals", nil)
+local SettingsTab = Window:CreateTab("⚙️ Settings", nil)
+
+-- MAIN TAB
+local MimicSection = MainTab:CreateSection("Mimic Controls")
+
+local SelectTargetButton = MainTab:CreateButton({
+    Name = "🎯 Select Target (Click Player)",
+    Callback = function()
+        Rayfield:Notify({
+            Title = "Target Selection",
+            Content = "Click on a player to select them as target",
+            Duration = 3,
+            Image = nil
+        })
+        
+        local conn
+        conn = mouse.Button1Down:Connect(function()
+            local target = mouse.Target
+            if target then
+                local targetChar = target:FindFirstAncestorOfClass("Model")
+                if targetChar and targetChar ~= State.localChar then
+                    local targetHum = targetChar:FindFirstChild("Humanoid")
+                    if targetHum then
+                        conn:Disconnect()
+                        State.targetChar = targetChar
+                        updateTargetCache()
+                        
+                        Rayfield:Notify({
+                            Title = "Target Selected",
+                            Content = "Target: " .. targetChar.Name,
+                            Duration = 2,
+                            Image = nil
+                        })
+                    end
+                end
+            end
+        end)
+    end
+})
+
+local StartMimicToggle = MainTab:CreateToggle({
+    Name = "⚡ Start Mimic (Ultra Fast)",
+    CurrentValue = false,
+    Flag = "MimicToggle",
+    Callback = function(value)
+        if value then
+            if State.targetChar then
+                startMimic(State.targetChar)
+                Rayfield:Notify({
+                    Title = "Mimic Active",
+                    Content = "Mimicking at maximum speed!",
+                    Duration = 2,
+                    Image = nil
+                })
+            else
+                Rayfield:Notify({
+                    Title = "Error",
+                    Content = "Select a target first!",
+                    Duration = 2,
+                    Image = nil
+                })
+            end
+        else
+            safeDisconnect(State.mimicConn)
+            State.mimicConn = nil
+            State.mimicEnabled = false
+            if State.localHumanoid then
+                State.localHumanoid.PlatformStand = false
+            end
+        end
+    end
+})
+
+local PredictionToggle = MainTab:CreateToggle({
+    Name = "🔮 Prediction (Kinematic)",
+    CurrentValue = true,
+    Flag = "PredictionToggle",
+    Callback = function(value)
+        State.prediction = value
+    end
+})
+
+local PredictionSlider = MainTab:CreateSlider({
+    Name = "Prediction Factor",
+    Range = {0, 0.5},
+    Increment = 0.01,
+    CurrentValue = 0.15,
+    Flag = "PredictionSlider",
+    Callback = function(value)
+        State.predictionFactor = value
+    end
+})
+
+-- COMBAT TAB
+local CombatSection = CombatTab:CreateSection("Combat Features")
+
+local AntiStunToggle = CombatTab:CreateToggle({
+    Name = "🛡️ Anti-Stun",
+    CurrentValue = false,
+    Flag = "AntiStunToggle",
+    Callback = function(value)
+        State.antiStun = value
+        if value then
+            setupAntiStun()
+        else
+            safeDisconnect(State.antiStunConn)
+            State.antiStunConn = nil
+        end
+    end
+})
+
+local AntiRagdollToggle = CombatTab:CreateToggle({
+    Name = "🛡️ Anti-Ragdoll",
+    CurrentValue = false,
+    Flag = "AntiRagdollToggle",
+    Callback = function(value)
+        State.antiRagdoll = value
+        if value then
+            setupAntiRagdoll()
+        else
+            safeDisconnect(State.antiRagdollConn)
+            State.antiRagdollConn = nil
+        end
+    end
+})
+
+local AntiLaunchToggle = CombatTab:CreateToggle({
+    Name = "🛡️ Anti-Launch",
+    CurrentValue = false,
+    Flag = "AntiLaunchToggle",
+    Callback = function(value)
+        State.antiLaunch = value
+        if value then
+            setupAntiLaunch()
+        else
+            safeDisconnect(State.antiLaunchConn)
+            State.antiLaunchConn = nil
+        end
+    end
+})
+
+local LockOnToggle = CombatTab:CreateToggle({
+    Name = "🎯 Lock-On Target",
+    CurrentValue = false,
+    Flag = "LockOnToggle",
+    Callback = function(value)
+        State.lockOn = value
+        if value then
+            setupLockOn()
+        else
+            safeDisconnect(State.lockOnConn)
+            State.lockOnConn = nil
+        end
+    end
+})
+
+local MovesetMimicToggle = CombatTab:CreateToggle({
+    Name = "🥊 Moveset Mimic",
+    CurrentValue = false,
+    Flag = "MovesetMimicToggle",
+    Callback = function(value)
+        State.movesetMimic = value
+        if value then
+            setupMovesetMimic()
+        else
+            safeDisconnect(State.movesetConn)
+            State.movesetConn = nil
+        end
+    end
+})
+
+-- VISUALS TAB
+local VisualsSection = VisualsTab:CreateSection("Visual Features")
+
+local CameraLockToggle = VisualsTab:CreateToggle({
+    Name = "📷 Camera Lock-On",
+    CurrentValue = false,
+    Flag = "CameraLockToggle",
+    Callback = function(value)
+        State.cameraLock = value
+        if value then
+            setupCameraLock()
+        else
+            safeDisconnect(State.cameraLockConn)
+            State.cameraLockConn = nil
+            disableCameraLock()
+        end
+    end
+})
+
+local RangeVizToggle = VisualsTab:CreateToggle({
+    Name = "📊 Range Visualizer",
+    CurrentValue = false,
+    Flag = "RangeVizToggle",
+    Callback = function(value)
+        State.rangeViz = value
+        if value then
+            createRangeVisualizer()
+            updateRangeVisualizer()
+        else
+            safeDisconnect(State.rangeUpdateConn)
+            State.rangeUpdateConn = nil
+            if State.rangePart then
+                State.rangePart:Destroy()
+                State.rangePart = nil
+            end
+        end
+    end
+})
+
+local RangeSlider = VisualsTab:CreateSlider({
+    Name = "Range Distance",
+    Range = {10, 100},
+    Increment = 5,
+    CurrentValue = 50,
+    Flag = "RangeSlider",
+    Callback = function(value)
+        State.rangeDistance = value
+        if State.rangePart then
+            State.rangePart.Size = Vector3.new(value * 2, 0.5, value * 2)
+        end
+    end
+})
+
+-- SETTINGS TAB
+local SettingsSection = SettingsTab:CreateSection("Performance Settings")
+
+local PerformanceLabel = SettingsTab:CreateLabel("All features optimized for RenderStepped")
+
+local StopAllButton = SettingsTab:CreateButton({
+    Name = "🛑 Stop All Features",
+    Callback = function()
+        stopAllFeatures()
+        Rayfield:Notify({
+            Title = "Stopped",
+            Content = "All features disabled",
+            Duration = 2,
+            Image = nil
+        })
+    end
+})
+
+-- Character respawn handler
+player.CharacterAdded:Connect(function(char)
+    task.wait(1)
+    stopAllFeatures()
+    updateLocalCache()
 end)
 
-jumpToggle.MouseButton1Click:Connect(function()
-    isJumpSync = not isJumpSync
-    jumpToggle.Text = isJumpSync and "Jump Sync: On" or "Jump Sync: Off"
-end)
+-- Initial cache update
+updateLocalCache()
 
-settingsToggle.MouseButton1Click:Connect(function()
-    settingsFrame.Visible = not settingsFrame.Visible
-end)
+-- Notification
+Rayfield:Notify({
+    Title = "⚡ TSB OPTIMIZED MIMIC",
+    Content = "Script loaded! Maximum performance enabled.",
+    Duration = 5,
+    Image = nil
+})
 
-closeButton.MouseButton1Click:Connect(function()
-    stopMimic()
-    hubGui:Destroy()
-end)
-
-local tweenInfo = TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-local tween = TweenService:Create(mainFrame, tweenInfo, {BackgroundTransparency = 0.1})
-tween:Play()
+print("=================================")
+print("TSB OPTIMIZED MIMIC SCRIPT LOADED")
+print("Features: Anti-Stun, Anti-Ragdoll, Anti-Launch")
+print("Lock-On, Camera Lock, Range Visualizer, Moveset Mimic")
+print("Optimized for MAXIMUM SPEED!")
+print("=================================")
