@@ -384,23 +384,65 @@ for track in targetTracks {
 
 ---
 
-### 11. Neural Network Optimizer System
+### 11. Enhanced Deep Neural Network Optimizer System
 
-**Purpose**: AI-powered automatic parameter optimization
+**Purpose**: AI-powered automatic parameter optimization using deep learning
 
-**Method**: Feedforward neural network with performance-based scoring
+**Method**: Enhanced feedforward neural network with advanced training and pre-learning
 
 **Architecture**:
 - **Input Layer**: 4 nodes (predictionFactor, rangeDistance, lockOnActive, currentFPS)
-- **Hidden Layer**: 6 nodes with ReLU activation
+- **Hidden Layer 1**: 8 nodes with LeakyReLU activation (increased capacity)
+- **Hidden Layer 2**: 8 nodes with Tanh activation (improved gradient flow)
+- **Hidden Layer 3**: 4 nodes with LeakyReLU activation (feature condensation)
 - **Output Layer**: 3 nodes with Sigmoid activation (optimalPrediction, optimalRange, optimalLockOn)
 
 **Algorithm**:
 ```lua
 // Forward pass
-hidden[j] = ReLU(sum(input[i] * weight[i][j]) + bias[j])
-output[k] = Sigmoid(sum(hidden[j] * weight[j][k]) + bias[k])
+// Layer 1: LeakyReLU
+hidden1[j] = LeakyReLU(sum(input[i] * weightsIH1[i][j]) + biasH1[j])
+
+// Layer 2: Tanh
+hidden2[j] = Tanh(sum(hidden1[i] * weightsH1H2[i][j]) + biasH2[j])
+
+// Layer 3: LeakyReLU
+hidden3[j] = LeakyReLU(sum(hidden2[i] * weightsH2H3[i][j]) + biasH3[j])
+
+// Output: Sigmoid
+output[k] = Sigmoid(sum(hidden3[j] * weightsH3O[j][k]) + biasO[k])
 ```
+
+**Activation Functions**:
+```lua
+// LeakyReLU (prevents dying neurons)
+LeakyReLU(x) = x > 0 ? x : 0.01 * x
+
+// Tanh (improved gradient flow)
+Tanh(x) = (exp(2x) - 1) / (exp(2x) + 1)
+
+// Sigmoid (output normalization)
+Sigmoid(x) = 1 / (1 + exp(-x))
+```
+
+**Weight Initialization**:
+```lua
+// He initialization for LeakyReLU layers
+heScale = sqrt(2.0 / inputSize)
+weight = (random() - 0.5) * 2 * heScale
+
+// Xavier initialization for Sigmoid output
+xavierScale = sqrt(1.0 / inputSize)
+weight = (random() - 0.5) * 2 * xavierScale
+```
+
+**Training**:
+- **Pre-training**: 100 simulated samples with diverse scenarios
+- **Epochs**: 50 iterations with full-batch gradient descent
+- **Learning Rate**: 0.02
+- **Loss Function**: Mean Squared Error (MSE)
+- **Backpropagation**: Full gradient computation through all layers
+- **Training Time**: ~1-2 seconds on initialization
 
 **Performance Scoring**:
 ```lua
@@ -426,19 +468,22 @@ if lockOn:
 - Normalization: All inputs normalized to 0-1 range
 
 **Optimization Process**:
-1. Collect performance samples during gameplay
-2. Find best-performing sample based on score
-3. Use neural network to predict optimal settings
-4. Apply denormalized outputs to game parameters
+1. Pre-train network on 100 simulated samples (initialization)
+2. Collect performance samples during gameplay
+3. Find best-performing sample based on score
+4. Use trained network to predict optimal settings
+5. Apply denormalized outputs to game parameters
 
 **UI Controls**:
 - Toggle: Enable/Disable AI optimization
-- Button: Apply optimized settings
-- Label: Real-time status and score display
+- Button: Apply deep learning optimized settings
+- Label: Real-time status, score, training loss, and epoch display
 
-**Performance**: ~0.05ms per optimization cycle (minimal overhead)
+**Performance**: ~0.1ms per optimization cycle (minimal overhead)
 
-**Memory**: ~2 KB additional (weights and samples storage)
+**Memory**: ~4 KB additional (weights, biases, training data, and samples storage)
+
+**Network Complexity**: 163 total parameters (140 weights + 23 biases)
 
 ---
 

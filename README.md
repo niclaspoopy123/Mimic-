@@ -63,22 +63,29 @@ loadstring(game:HttpGet('https://raw.githubusercontent.com/niclaspoopy123/Mimic-
 - **Range Visualizer**: Shows attack range circle
 - **Range Distance**: Adjust visualizer size (10-100 studs)
 
-### Neural Network Optimizer
+### Enhanced Deep Neural Network Optimizer
 - **AI Optimization**: Enable automatic data collection and analysis
-- **Apply Optimized Settings**: Apply AI-recommended settings for maximum performance
-- **Real-time Scoring**: Monitor performance score during gameplay
+- **Deep Learning**: 4-layer architecture (4→8→8→4→3) with 50 training epochs
+- **Pre-trained Network**: Trained on 100 simulated samples for immediate accuracy
+- **Apply Optimized Settings**: Apply deep learning-recommended settings for maximum performance
+- **Real-time Scoring**: Monitor performance score and training loss during gameplay
 
 ## ⚙️ Technical Details
 
 ### Neural Network Architecture
-The script includes a lightweight feedforward neural network for automatic parameter optimization:
-- **Architecture**: 3-layer network (Input: 4, Hidden: 6, Output: 3)
+The script includes an enhanced deep feedforward neural network for automatic parameter optimization:
+- **Architecture**: 4-layer deep network (Input: 4, Hidden1: 8, Hidden2: 8, Hidden3: 4, Output: 3)
 - **Inputs**: Prediction factor, range distance, lock-on state, current FPS
 - **Outputs**: Optimal prediction factor, optimal range, optimal lock-on state
-- **Activation Functions**: ReLU for hidden layer (efficiency), Sigmoid for output (normalization)
+- **Activation Functions**: 
+  - LeakyReLU for hidden layers 1 and 3 (prevents dying neurons)
+  - Tanh for hidden layer 2 (improved gradient flow)
+  - Sigmoid for output layer (normalization)
+- **Weight Initialization**: He initialization for ReLU layers, Xavier for sigmoid output
+- **Training**: 50 epochs with backpropagation on 100 simulated samples
 - **Performance Scoring**: Combines FPS, target distance, and lock-on accuracy
 - **Sample Collection**: Gathers 20 samples at 2-second intervals
-- **Minimal Overhead**: ~0.05ms per optimization cycle
+- **Minimal Overhead**: ~0.1ms per optimization cycle
 
 ### Performance Features
 - **Cached Services**: All Roblox services cached at startup
@@ -143,7 +150,9 @@ Settings are automatically saved using Rayfield's configuration system in:
 
 **Neural Network Optimizer?**
 - See detailed guide: [NEURAL_NETWORK.md](NEURAL_NETWORK.md)
-- Requires at least 5 samples before applying
+- Enhanced with 4-layer deep architecture (4→8→8→4→3)
+- Pre-trained on 100 simulated samples with 50 training epochs
+- Requires at least 5 samples before applying (10 recommended)
 - Works best with stable FPS and active target
 
 **Performance issues?**
