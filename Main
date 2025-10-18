@@ -163,7 +163,7 @@ local function setupAntiLaunch()
     end)
 end
 
--- OPTIMIZED PREDICTION (Cached calculations)
+-- OPTIMIZED PREDICTION (Cached calculations with bounds checking)
 local function getPredictedPosition()
     if not State.prediction or not State.targetHRP then 
         return State.targetHRP and State.targetHRP.Position or Vector3.zero
@@ -173,14 +173,47 @@ local function getPredictedPosition()
     local currentVel = State.targetHRP.AssemblyLinearVelocity
     local dt = State.predictionFactor
     
+    -- BOUNDS CHECK: Skip prediction near 0.5 to prevent teleporting
+    -- When prediction factor is near max (0.45-0.5), use reduced factor
+    if dt >= 0.45 then
+        -- Clamp to safer range and apply damping
+        dt = 0.40  -- Safe maximum to prevent extreme predictions
+    end
+    
+    -- STABILITY CHECK: If prediction factor is risky (0.35-0.45), apply smoothing
+    if dt >= 0.35 and dt < 0.45 then
+        -- Reduce prediction strength progressively as we approach 0.45
+        local dampingFactor = 1 - ((dt - 0.35) / 0.1) * 0.3  -- 30% reduction at 0.45
+        dt = dt * dampingFactor
+    end
+    
     -- Update acceleration (cached from last frame)
     State.targetAcceleration = (currentVel - State.targetVelocity) / 0.016
     State.targetVelocity = currentVel
     
+    -- VELOCITY CHECK: If velocity is extreme, reduce prediction to avoid teleporting
+    local velMagnitude = currentVel.Magnitude
+    if velMagnitude > 200 then
+        -- Extreme velocity detected, use minimal prediction
+        dt = math.min(dt, 0.05)
+    elseif velMagnitude > 100 then
+        -- High velocity, reduce prediction factor
+        dt = dt * 0.7
+    end
+    
     -- Kinematic prediction: p = p0 + v*t + 0.5*a*t^2
-    return State.targetHRP.Position + 
-           currentVel * dt + 
-           State.targetAcceleration * (0.5 * dt * dt)
+    local predictedOffset = currentVel * dt + State.targetAcceleration * (0.5 * dt * dt)
+    
+    -- SANITY CHECK: Limit maximum prediction offset to prevent teleporting
+    -- Dynamic max based on velocity - higher velocity = higher allowed offset (within reason)
+    local maxOffset = math.min(50, 15 + velMagnitude * 0.15)  -- Scale with velocity, cap at 50 studs
+    
+    if predictedOffset.Magnitude > maxOffset then
+        -- Clamp the prediction offset to reasonable bounds
+        predictedOffset = predictedOffset.Unit * maxOffset
+    end
+    
+    return State.targetHRP.Position + predictedOffset
 end
 
 -- LOCK-ON SYSTEM (Smooth target tracking)
@@ -299,7 +332,7 @@ local function setupMovesetMimic()
     end)
 end
 
--- CORE MIMIC FUNCTION (Maximum optimization)
+-- CORE MIMIC FUNCTION (Maximum optimization with stability checks)
 local function mimicCore()
     if not State.targetHRP or not State.localHRP then 
         updateTargetCache()
@@ -310,14 +343,43 @@ local function mimicCore()
     -- Get predicted position (using cached calculations)
     local predictedPos = getPredictedPosition()
     
+    -- TELEPORT PREVENTION: Check if predicted position is too far from target
+    local currentTargetPos = State.targetHRP.Position
+    local predictionDistance = (predictedPos - currentTargetPos).Magnitude
+    
+    -- If prediction is unreasonably far (>50 studs from target), use actual position
+    if predictionDistance > 50 then
+        predictedPos = currentTargetPos
+    end
+    
+    -- SMOOTH UPDATE: Check if the position change is too large (teleporting)
+    local currentLocalPos = State.localHRP.Position
+    local moveDistance = (predictedPos - currentLocalPos).Magnitude
+    
+    -- If movement is too large in one frame (>100 studs), apply smoothing
+    if moveDistance > 100 then
+        -- Lerp towards target position instead of instant teleport
+        local lerpFactor = 100 / moveDistance  -- Move max 100 studs per frame
+        predictedPos = currentLocalPos:Lerp(predictedPos, lerpFactor)
+    end
+    
     -- Apply position and rotation in one operation
     State.localHRP.CFrame = CFrame.new(predictedPos) * State.targetHRP.CFrame.Rotation
     
-    -- Sync velocity for smooth physics
-    State.localHRP.AssemblyLinearVelocity = State.targetHRP.AssemblyLinearVelocity
+    -- Sync velocity for smooth physics (with clamping)
+    local targetVel = State.targetHRP.AssemblyLinearVelocity
+    -- Clamp velocity to prevent physics explosions
+    if targetVel.Magnitude > 500 then
+        targetVel = targetVel.Unit * 500
+    end
+    State.localHRP.AssemblyLinearVelocity = targetVel
     
-    -- Sync angular velocity for rotation matching
-    State.localHRP.AssemblyAngularVelocity = State.targetHRP.AssemblyAngularVelocity
+    -- Sync angular velocity for rotation matching (with clamping)
+    local targetAngVel = State.targetHRP.AssemblyAngularVelocity
+    if targetAngVel.Magnitude > 50 then
+        targetAngVel = targetAngVel.Unit * 50
+    end
+    State.localHRP.AssemblyAngularVelocity = targetAngVel
     
     -- Jump state synchronization
     if State.targetHumanoid and State.localHumanoid then
@@ -485,6 +547,25 @@ local PredictionSlider = MainTab:CreateSlider({
     CurrentValue = 0.15,
     Flag = "PredictionSlider",
     Callback = function(value)
+        -- BOUNDS WARNING: Notify user if prediction is dangerously high
+        if value >= 0.40 then
+            Rayfield:Notify({
+                Title = "⚠️ Warning: High Prediction",
+                Content = "Values ≥0.4 may cause teleporting! Recommend ≤0.35",
+                Duration = 4,
+                Image = nil
+            })
+            -- Automatically cap at safe value
+            value = 0.35
+        elseif value >= 0.35 then
+            Rayfield:Notify({
+                Title = "⚠️ Caution: High Prediction",
+                Content = "Approaching unstable range. Monitor for teleporting.",
+                Duration = 3,
+                Image = nil
+            })
+        end
+        
         State.predictionFactor = value
     end
 })
@@ -855,12 +936,16 @@ function NeuralNetwork:generateSimulatedData()
         -- Calculate optimal outputs based on heuristics
         local optimalPred, optimalRange, optimalLockOn
         
-        -- High FPS allows higher prediction
+        -- High FPS allows higher prediction, but cap at 0.30 to prevent teleporting
+        -- Values near 0.5 cause erratic movement and should be avoided
         if fps > 50 then
-            optimalPred = 0.15 + math.random() * 0.1  -- 0.15-0.25
+            optimalPred = 0.15 + math.random() * 0.08  -- 0.15-0.23 (safer range)
         else
             optimalPred = 0.08 + math.random() * 0.07  -- 0.08-0.15
         end
+        
+        -- Ensure we never train with values approaching 0.4+
+        optimalPred = math.min(optimalPred, 0.30)
         
         -- Optimal range based on FPS and prediction
         if fps > 50 and predFactor > 0.15 then
@@ -1036,8 +1121,25 @@ function NeuralNetwork:optimize()
     local newRange = outputs[2] * 100
     local newLockOn = outputs[3] > 0.5
     
-    -- Clamp values to valid ranges
-    newPrediction = math.max(0, math.min(0.5, newPrediction))
+    -- ENHANCED BOUNDS CHECKING: Prevent prediction values near 0.5
+    -- Values between 0.4-0.5 cause teleporting and erratic movement
+    if newPrediction >= 0.40 then
+        -- Cap at safe maximum to prevent teleporting
+        newPrediction = 0.35  -- Safe upper limit
+    end
+    
+    -- Additional safety: If prediction is too high for current conditions, reduce it
+    if newPrediction >= 0.30 then
+        -- Check if FPS is high enough to support this prediction
+        local currentFPS = bestSample.inputs[4] * 60  -- Denormalize FPS
+        if currentFPS < 45 then
+            -- Low FPS, reduce prediction to prevent jitter
+            newPrediction = math.min(newPrediction, 0.20)
+        end
+    end
+    
+    -- Clamp values to safe ranges
+    newPrediction = math.max(0, math.min(0.35, newPrediction))  -- Max 0.35 instead of 0.5
     newRange = math.max(10, math.min(100, newRange))
     
     return true, {

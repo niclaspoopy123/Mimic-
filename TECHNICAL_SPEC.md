@@ -157,7 +157,7 @@ mimicCore() {
 
 **Purpose**: Anticipate target movement for smoother tracking
 
-**Algorithm**: Kinematic motion equation
+**Algorithm**: Kinematic motion equation with enhanced safety checks
 ```
 P(t) = P₀ + V₀·t + ½·a·t²
 
@@ -166,8 +166,17 @@ P(t) = Predicted position at time t
 P₀ = Current position
 V₀ = Current velocity
 a = Current acceleration
-t = Prediction factor (time delta)
+t = Prediction time factor (clamped and dynamically adjusted based on velocity and conditions)
 ```
+
+**Enhanced Safety Features**:
+1. **Bounds Checking**: Prediction factors ≥0.45 are clamped to 0.40
+2. **Progressive Damping**: Factors 0.35-0.45 receive up to 30% damping
+3. **Velocity Scaling**: 
+   - Extreme velocity (>200 studs/s): Prediction clamped to 0.05
+   - High velocity (>100 studs/s): Prediction reduced by 30%
+4. **Dynamic Offset Clamping**: Maximum offset scales with velocity (15-50 studs)
+5. **Teleport Prevention**: Position validation with lerp smoothing for large jumps
 
 **Optimization**: Cached velocity from previous frame
 ```lua
@@ -178,9 +187,9 @@ State.targetVelocity = currentVelocity
 acceleration = (currentVelocity - State.targetVelocity) / dt
 ```
 
-**Performance**: 2 vector operations + 1 scalar multiply
+**Performance**: 2 vector operations + 1 scalar multiply + safety checks
 
-**Accuracy**: ±5 studs at 0.15 prediction factor
+**Accuracy**: ±5 studs at 0.15 prediction factor (with stability improvements)
 
 ---
 
@@ -653,34 +662,48 @@ Creates range indicator part
 
 ```lua
 State = {
-    predictionFactor: 0.15,      // 0-0.5, lower = less prediction
+    predictionFactor: 0.15,      // 0-0.5, RECOMMENDED: 0.08-0.35
     updateRate: 0,               // 0 = every frame
     rangeDistance: 50,           // 10-100 studs
     moveCooldown: 0.1,          // seconds between move detections
 }
 ```
 
+**Prediction Factor Safe Ranges**:
+- **0.08-0.15**: Safe for all conditions (recommended)
+- **0.15-0.25**: Good for medium-range tracking with stable FPS
+- **0.25-0.35**: High prediction, requires 50+ FPS
+- **0.35-0.45**: Damping zone, automatically reduced
+- **≥0.45**: Auto-clamped to 0.40 (prevents teleporting)
+
 ### Performance Profiles
 
-**Maximum Speed**:
+**Maximum Speed** (Lowest latency):
 ```lua
 predictionFactor = 0.10
 rangeViz = false
 movesetMimic = false
 ```
 
-**Maximum Accuracy**:
+**Maximum Accuracy** (Best tracking):
 ```lua
-predictionFactor = 0.20
+predictionFactor = 0.25  // Was 0.20, now safer upper bound
 rangeViz = true
 movesetMimic = true
 ```
 
-**Balanced**:
+**Balanced** (Recommended):
 ```lua
 predictionFactor = 0.15
 rangeViz = true
 movesetMimic = false
+```
+
+**High Performance** (60+ FPS systems):
+```lua
+predictionFactor = 0.30  // Safe with high FPS
+rangeViz = true
+movesetMimic = true
 ```
 
 ---
@@ -704,7 +727,19 @@ movesetMimic = false
 
 ## Version History
 
-### v1.0.0 (Current)
+### v1.1.0 (Current)
+- **Fixed**: Prediction teleporting issue around 0.5 factor
+- **Added**: Dynamic bounds checking for prediction factors
+- **Added**: Progressive damping for high prediction values (0.35-0.45)
+- **Added**: Velocity-based prediction reduction
+- **Added**: Dynamic offset clamping (15-50 studs based on velocity)
+- **Added**: Teleport prevention with position validation
+- **Added**: User warnings for dangerous prediction values
+- **Improved**: Neural network training to avoid extreme predictions
+- **Improved**: Smooth position updates with lerp for large jumps
+- Complete test suite with 10 passing tests
+
+### v1.0.0
 - Initial optimized release
 - All core features implemented
 - Maximum performance optimizations
