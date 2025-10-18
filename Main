@@ -72,6 +72,7 @@ local State = {
     predictionFactor = 0.15,
     updateRate = 0, -- RenderStepped every frame
     rangeDistance = 50,
+    currentFPS = 60, -- Cached FPS value
     
     -- Moveset data cache
     movesetData = {},
@@ -715,8 +716,7 @@ function NeuralNetwork:calculateScore()
     local score = 0
     
     -- FPS component (higher is better, target 60)
-    local fps = 1 / RunService.RenderStepped:Wait()
-    score = score + math.min(fps / 60, 1) * 40
+    score = score + math.min(State.currentFPS / 60, 1) * 40
     
     -- Distance to target (closer is better when in range)
     if State.targetHRP and State.localHRP then
@@ -744,13 +744,12 @@ end
 function NeuralNetwork:collectSample()
     if not State.localHRP or not State.targetHRP then return end
     
-    local fps = 1 / RunService.RenderStepped:Wait()
     local sample = {
         inputs = {
             State.predictionFactor / 0.5,  -- Normalized to 0-1
             State.rangeDistance / 100,     -- Normalized to 0-1
             State.lockOn and 1 or 0,       -- Boolean to 0 or 1
-            math.min(fps / 60, 1)          -- Normalized FPS
+            math.min(State.currentFPS / 60, 1)  -- Normalized FPS
         },
         score = self:calculateScore()
     }
@@ -932,6 +931,17 @@ end)
 
 -- Initial cache update
 updateLocalCache()
+
+-- FPS tracker for neural network (lightweight)
+local lastFrameTime = tick()
+RunService.RenderStepped:Connect(function()
+    local currentTime = tick()
+    local deltaTime = currentTime - lastFrameTime
+    if deltaTime > 0 then
+        State.currentFPS = 1 / deltaTime
+    end
+    lastFrameTime = currentTime
+end)
 
 -- Notification
 Rayfield:Notify({
