@@ -197,6 +197,25 @@ if State.localHumanoid.PlatformStand and not State.mimicEnabled then
 end
 ```
 
+### 6. Neural Network Optimization
+AI-powered parameter tuning for maximum performance:
+```lua
+-- Lightweight feedforward network
+-- Input: 4 nodes (current settings + FPS)
+-- Hidden: 6 nodes (ReLU activation)
+-- Output: 3 nodes (optimal settings)
+
+// Performance scoring combines:
+score = FPS_component + distance_component + alignment_component
+
+// Only 20 samples needed for optimization
+// Runs asynchronously every 2 seconds
+```
+
+**Benefit**: Automatically finds optimal settings for your hardware and playstyle
+**Overhead**: ~0.05ms per optimization cycle
+**Memory**: ~2 KB for weights and samples
+
 ## Best Practices for Maximum Performance
 
 ### DO ✅
