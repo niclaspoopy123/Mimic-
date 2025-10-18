@@ -620,95 +620,188 @@ local RangeSlider = VisualsTab:CreateSlider({
     end
 })
 
--- NEURAL NETWORK MODULE (Lightweight feedforward network for parameter optimization)
+-- NEURAL NETWORK MODULE (Enhanced deep feedforward network for parameter optimization)
 local NeuralNetwork = {
     -- Network state
     running = false,
     samples = {},
     maxSamples = 20,
     
-    -- Network architecture (simple 3-layer network)
-    inputSize = 4,  -- [predictionFactor, rangeDistance, lockOnActive, currentFPS]
-    hiddenSize = 6,
-    outputSize = 3, -- [optimalPrediction, optimalRange, optimalLockOn]
+    -- Enhanced network architecture (4-layer deep network)
+    inputSize = 4,      -- [predictionFactor, rangeDistance, lockOnActive, currentFPS]
+    hiddenSize1 = 8,    -- First hidden layer (increased capacity)
+    hiddenSize2 = 8,    -- Second hidden layer (depth for complex patterns)
+    hiddenSize3 = 4,    -- Third hidden layer (feature condensation)
+    outputSize = 3,     -- [optimalPrediction, optimalRange, optimalLockOn]
     
-    -- Weights (small random initialization)
-    weightsInputHidden = {},
-    weightsHiddenOutput = {},
-    biasHidden = {},
-    biasOutput = {},
+    -- Weights (He/Xavier initialization for deeper networks)
+    weightsIH1 = {},
+    weightsH1H2 = {},
+    weightsH2H3 = {},
+    weightsH3O = {},
+    biasH1 = {},
+    biasH2 = {},
+    biasH3 = {},
+    biasO = {},
     
     -- Training parameters
-    learningRate = 0.01,
+    learningRate = 0.02,
+    trainingIterations = 50,  -- Increased training iterations
+    batchSize = 10,
     
     -- Performance metrics
     bestScore = 0,
     currentScore = 0,
+    trainingLoss = 0,
+    epoch = 0,
 }
 
--- Initialize neural network weights
+-- Initialize neural network weights with He initialization
 function NeuralNetwork:init()
-    -- Random initialization for weights between -0.5 and 0.5
     math.randomseed(tick())
     
-    -- Input to Hidden weights
+    -- He initialization for better gradient flow in deep networks
+    -- Input to Hidden1 weights
+    local heScale1 = math.sqrt(2.0 / self.inputSize)
     for i = 1, self.inputSize do
-        self.weightsInputHidden[i] = {}
-        for j = 1, self.hiddenSize do
-            self.weightsInputHidden[i][j] = (math.random() - 0.5) * 0.5
+        self.weightsIH1[i] = {}
+        for j = 1, self.hiddenSize1 do
+            self.weightsIH1[i][j] = (math.random() - 0.5) * 2 * heScale1
         end
     end
     
-    -- Hidden to Output weights
-    for i = 1, self.hiddenSize do
-        self.weightsHiddenOutput[i] = {}
+    -- Hidden1 to Hidden2 weights
+    local heScale2 = math.sqrt(2.0 / self.hiddenSize1)
+    for i = 1, self.hiddenSize1 do
+        self.weightsH1H2[i] = {}
+        for j = 1, self.hiddenSize2 do
+            self.weightsH1H2[i][j] = (math.random() - 0.5) * 2 * heScale2
+        end
+    end
+    
+    -- Hidden2 to Hidden3 weights
+    local heScale3 = math.sqrt(2.0 / self.hiddenSize2)
+    for i = 1, self.hiddenSize2 do
+        self.weightsH2H3[i] = {}
+        for j = 1, self.hiddenSize3 do
+            self.weightsH2H3[i][j] = (math.random() - 0.5) * 2 * heScale3
+        end
+    end
+    
+    -- Hidden3 to Output weights (Xavier for sigmoid output)
+    local xavierScale = math.sqrt(1.0 / self.hiddenSize3)
+    for i = 1, self.hiddenSize3 do
+        self.weightsH3O[i] = {}
         for j = 1, self.outputSize do
-            self.weightsHiddenOutput[i][j] = (math.random() - 0.5) * 0.5
+            self.weightsH3O[i][j] = (math.random() - 0.5) * 2 * xavierScale
         end
     end
     
-    -- Bias initialization
-    for i = 1, self.hiddenSize do
-        self.biasHidden[i] = (math.random() - 0.5) * 0.1
+    -- Bias initialization (small values)
+    for i = 1, self.hiddenSize1 do
+        self.biasH1[i] = 0.01
+    end
+    for i = 1, self.hiddenSize2 do
+        self.biasH2[i] = 0.01
+    end
+    for i = 1, self.hiddenSize3 do
+        self.biasH3[i] = 0.01
     end
     for i = 1, self.outputSize do
-        self.biasOutput[i] = (math.random() - 0.5) * 0.1
+        self.biasO[i] = 0
     end
+    
+    -- Generate and train on simulated data
+    self:generateSimulatedData()
+    self:trainNetwork()
 end
 
--- Activation function (ReLU for efficiency)
-function NeuralNetwork:relu(x)
-    return math.max(0, x)
+-- Leaky ReLU activation function (prevents dying neurons)
+function NeuralNetwork:leakyRelu(x)
+    return x > 0 and x or x * 0.01
+end
+
+-- Leaky ReLU derivative for backpropagation
+function NeuralNetwork:leakyReluDerivative(x)
+    return x > 0 and 1 or 0.01
+end
+
+-- Tanh activation (improved over sigmoid for hidden layers)
+function NeuralNetwork:tanh(x)
+    local exp2x = math.exp(2 * x)
+    return (exp2x - 1) / (exp2x + 1)
+end
+
+-- Tanh derivative
+function NeuralNetwork:tanhDerivative(x)
+    local t = self:tanh(x)
+    return 1 - t * t
 end
 
 -- Sigmoid for output normalization
 function NeuralNetwork:sigmoid(x)
+    -- Prevent overflow
+    x = math.max(-50, math.min(50, x))
     return 1 / (1 + math.exp(-x))
 end
 
--- Forward pass through network
+-- Sigmoid derivative
+function NeuralNetwork:sigmoidDerivative(x)
+    local s = self:sigmoid(x)
+    return s * (1 - s)
+end
+
+-- Forward pass through deep network
 function NeuralNetwork:forward(inputs)
-    -- Hidden layer computation
-    local hidden = {}
-    for j = 1, self.hiddenSize do
-        local sum = self.biasHidden[j]
+    -- Hidden layer 1 computation (LeakyReLU)
+    local hidden1 = {}
+    local z1 = {}
+    for j = 1, self.hiddenSize1 do
+        local sum = self.biasH1[j]
         for i = 1, self.inputSize do
-            sum = sum + inputs[i] * self.weightsInputHidden[i][j]
+            sum = sum + inputs[i] * self.weightsIH1[i][j]
         end
-        hidden[j] = self:relu(sum)
+        z1[j] = sum
+        hidden1[j] = self:leakyRelu(sum)
     end
     
-    -- Output layer computation
-    local outputs = {}
-    for k = 1, self.outputSize do
-        local sum = self.biasOutput[k]
-        for j = 1, self.hiddenSize do
-            sum = sum + hidden[j] * self.weightsHiddenOutput[j][k]
+    -- Hidden layer 2 computation (Tanh)
+    local hidden2 = {}
+    local z2 = {}
+    for j = 1, self.hiddenSize2 do
+        local sum = self.biasH2[j]
+        for i = 1, self.hiddenSize1 do
+            sum = sum + hidden1[i] * self.weightsH1H2[i][j]
         end
+        z2[j] = sum
+        hidden2[j] = self:tanh(sum)
+    end
+    
+    -- Hidden layer 3 computation (LeakyReLU)
+    local hidden3 = {}
+    local z3 = {}
+    for j = 1, self.hiddenSize3 do
+        local sum = self.biasH3[j]
+        for i = 1, self.hiddenSize2 do
+            sum = sum + hidden2[i] * self.weightsH2H3[i][j]
+        end
+        z3[j] = sum
+        hidden3[j] = self:leakyRelu(sum)
+    end
+    
+    -- Output layer computation (Sigmoid)
+    local outputs = {}
+    local zo = {}
+    for k = 1, self.outputSize do
+        local sum = self.biasO[k]
+        for j = 1, self.hiddenSize3 do
+            sum = sum + hidden3[j] * self.weightsH3O[j][k]
+        end
+        zo[k] = sum
         outputs[k] = self:sigmoid(sum)
     end
     
-    return outputs
+    return outputs, {z1 = z1, z2 = z2, z3 = z3, zo = zo, h1 = hidden1, h2 = hidden2, h3 = hidden3}
 end
 
 -- Calculate performance score based on current metrics
@@ -738,6 +831,165 @@ function NeuralNetwork:calculateScore()
     end
     
     return score
+end
+
+-- Generate simulated training data for pre-training
+function NeuralNetwork:generateSimulatedData()
+    self.trainingData = {}
+    
+    -- Generate diverse training scenarios
+    for i = 1, 100 do
+        local predFactor = math.random() * 0.5  -- 0 to 0.5
+        local range = 10 + math.random() * 90   -- 10 to 100
+        local lockOn = math.random() > 0.5 and 1 or 0
+        local fps = 30 + math.random() * 30     -- 30 to 60
+        
+        -- Normalize inputs
+        local inputs = {
+            predFactor / 0.5,
+            range / 100,
+            lockOn,
+            math.min(fps / 60, 1)
+        }
+        
+        -- Calculate optimal outputs based on heuristics
+        local optimalPred, optimalRange, optimalLockOn
+        
+        -- High FPS allows higher prediction
+        if fps > 50 then
+            optimalPred = 0.15 + math.random() * 0.1  -- 0.15-0.25
+        else
+            optimalPred = 0.08 + math.random() * 0.07  -- 0.08-0.15
+        end
+        
+        -- Optimal range based on FPS and prediction
+        if fps > 50 and predFactor > 0.15 then
+            optimalRange = 60 + math.random() * 30  -- 60-90
+        else
+            optimalRange = 30 + math.random() * 30  -- 30-60
+        end
+        
+        -- Lock-on beneficial in most cases
+        optimalLockOn = math.random() > 0.3 and 1 or 0
+        
+        -- Normalize outputs
+        local outputs = {
+            optimalPred / 0.5,
+            optimalRange / 100,
+            optimalLockOn
+        }
+        
+        table.insert(self.trainingData, {
+            inputs = inputs,
+            outputs = outputs
+        })
+    end
+end
+
+-- Backpropagation training
+function NeuralNetwork:trainNetwork()
+    if not self.trainingData then return end
+    
+    for epoch = 1, self.trainingIterations do
+        local totalLoss = 0
+        
+        -- Train on all samples
+        for _, sample in ipairs(self.trainingData) do
+            -- Forward pass
+            local predictions, cache = self:forward(sample.inputs)
+            
+            -- Calculate loss (Mean Squared Error)
+            local loss = 0
+            for i = 1, self.outputSize do
+                local diff = predictions[i] - sample.outputs[i]
+                loss = loss + diff * diff
+            end
+            loss = loss / self.outputSize
+            totalLoss = totalLoss + loss
+            
+            -- Backpropagation
+            -- Output layer gradients
+            local deltaO = {}
+            for k = 1, self.outputSize do
+                local error = predictions[k] - sample.outputs[k]
+                deltaO[k] = error * self:sigmoidDerivative(cache.zo[k])
+            end
+            
+            -- Hidden layer 3 gradients
+            local deltaH3 = {}
+            for j = 1, self.hiddenSize3 do
+                local error = 0
+                for k = 1, self.outputSize do
+                    error = error + deltaO[k] * self.weightsH3O[j][k]
+                end
+                deltaH3[j] = error * self:leakyReluDerivative(cache.z3[j])
+            end
+            
+            -- Hidden layer 2 gradients
+            local deltaH2 = {}
+            for j = 1, self.hiddenSize2 do
+                local error = 0
+                for k = 1, self.hiddenSize3 do
+                    error = error + deltaH3[k] * self.weightsH2H3[j][k]
+                end
+                deltaH2[j] = error * self:tanhDerivative(cache.z2[j])
+            end
+            
+            -- Hidden layer 1 gradients
+            local deltaH1 = {}
+            for j = 1, self.hiddenSize1 do
+                local error = 0
+                for k = 1, self.hiddenSize2 do
+                    error = error + deltaH2[k] * self.weightsH1H2[j][k]
+                end
+                deltaH1[j] = error * self:leakyReluDerivative(cache.z1[j])
+            end
+            
+            -- Update weights and biases
+            -- Hidden3 to Output
+            for j = 1, self.hiddenSize3 do
+                for k = 1, self.outputSize do
+                    self.weightsH3O[j][k] = self.weightsH3O[j][k] - self.learningRate * deltaO[k] * cache.h3[j]
+                end
+            end
+            for k = 1, self.outputSize do
+                self.biasO[k] = self.biasO[k] - self.learningRate * deltaO[k]
+            end
+            
+            -- Hidden2 to Hidden3
+            for j = 1, self.hiddenSize2 do
+                for k = 1, self.hiddenSize3 do
+                    self.weightsH2H3[j][k] = self.weightsH2H3[j][k] - self.learningRate * deltaH3[k] * cache.h2[j]
+                end
+            end
+            for k = 1, self.hiddenSize3 do
+                self.biasH3[k] = self.biasH3[k] - self.learningRate * deltaH3[k]
+            end
+            
+            -- Hidden1 to Hidden2
+            for j = 1, self.hiddenSize1 do
+                for k = 1, self.hiddenSize2 do
+                    self.weightsH1H2[j][k] = self.weightsH1H2[j][k] - self.learningRate * deltaH2[k] * cache.h1[j]
+                end
+            end
+            for k = 1, self.hiddenSize2 do
+                self.biasH2[k] = self.biasH2[k] - self.learningRate * deltaH2[k]
+            end
+            
+            -- Input to Hidden1
+            for i = 1, self.inputSize do
+                for j = 1, self.hiddenSize1 do
+                    self.weightsIH1[i][j] = self.weightsIH1[i][j] - self.learningRate * deltaH1[j] * sample.inputs[i]
+                end
+            end
+            for j = 1, self.hiddenSize1 do
+                self.biasH1[j] = self.biasH1[j] - self.learningRate * deltaH1[j]
+            end
+        end
+        
+        self.trainingLoss = totalLoss / #self.trainingData
+        self.epoch = epoch
+    end
 end
 
 -- Collect performance samples
@@ -833,9 +1085,11 @@ local SettingsSection = SettingsTab:CreateSection("Performance Settings")
 local PerformanceLabel = SettingsTab:CreateLabel("All features optimized for RenderStepped")
 
 -- Neural Network Optimization Section
-local NNSection = SettingsTab:CreateSection("🧠 Neural Network Optimizer")
+local NNSection = SettingsTab:CreateSection("🧠 Enhanced Deep Neural Network")
 
-local NNLabel = SettingsTab:CreateLabel("AI-powered automatic parameter optimization")
+local NNLabel = SettingsTab:CreateLabel("AI-powered optimization with 4-layer deep network (4→8→8→4→3)")
+
+local NNArchLabel = SettingsTab:CreateLabel("Features: LeakyReLU/Tanh activations, He/Xavier init, Backpropagation")
 
 local NNOptimizeToggle = SettingsTab:CreateToggle({
     Name = "🤖 Enable AI Optimization",
@@ -851,7 +1105,7 @@ local NNOptimizeToggle = SettingsTab:CreateToggle({
 })
 
 local NNApplyButton = SettingsTab:CreateButton({
-    Name = "✨ Apply Optimized Settings",
+    Name = "✨ Apply Deep Learning Optimized Settings",
     Callback = function()
         local success, result = NeuralNetwork:optimize()
         
@@ -866,12 +1120,13 @@ local NNApplyButton = SettingsTab:CreateButton({
             end
             
             Rayfield:Notify({
-                Title = "Optimization Applied",
+                Title = "Deep Learning Applied ✓",
                 Content = string.format(
-                    "Prediction: %.2f | Range: %.0f | Score: %.1f",
+                    "Prediction: %.3f | Range: %.0f | Score: %.1f | Epoch: %d",
                     result.prediction,
                     result.range,
-                    result.score
+                    result.score,
+                    NeuralNetwork.epoch
                 ),
                 Duration = 5,
                 Image = nil
@@ -887,7 +1142,7 @@ local NNApplyButton = SettingsTab:CreateButton({
     end
 })
 
-local NNStatusLabel = SettingsTab:CreateLabel("Status: Ready - Enable optimizer to collect data")
+local NNStatusLabel = SettingsTab:CreateLabel("Status: Pre-trained on 100 samples | Training Loss: " .. string.format("%.4f", NeuralNetwork.trainingLoss))
 
 -- Update status label periodically
 task.spawn(function()
@@ -897,13 +1152,18 @@ task.spawn(function()
             local sampleCount = #NeuralNetwork.samples
             local currentScore = NeuralNetwork:calculateScore()
             NNStatusLabel:Set(string.format(
-                "Status: Collecting data (%d/%d samples) | Score: %.1f",
+                "Collecting data (%d/%d) | Score: %.1f | Loss: %.4f | Epochs: %d",
                 sampleCount,
                 NeuralNetwork.maxSamples,
-                currentScore
+                currentScore,
+                NeuralNetwork.trainingLoss,
+                NeuralNetwork.epoch
             ))
         else
-            NNStatusLabel:Set("Status: Ready - Enable optimizer to collect data")
+            NNStatusLabel:Set(string.format(
+                "Pre-trained on 100 samples | Loss: %.4f | Ready for collection",
+                NeuralNetwork.trainingLoss
+            ))
         end
     end
 end)
@@ -951,7 +1211,7 @@ end)
 -- Notification
 Rayfield:Notify({
     Title = "⚡ TSB OPTIMIZED MIMIC",
-    Content = "Script loaded! Maximum performance enabled with AI optimization.",
+    Content = "Enhanced Deep Neural Network loaded! 4-layer architecture with 50 training epochs.",
     Duration = 5,
     Image = nil
 })
@@ -960,6 +1220,9 @@ print("=================================")
 print("TSB OPTIMIZED MIMIC SCRIPT LOADED")
 print("Features: Anti-Stun, Anti-Ragdoll, Anti-Launch")
 print("Lock-On, Camera Lock, Range Visualizer, Moveset Mimic")
-print("NEW: Neural Network Parameter Optimizer")
+print("ENHANCED: Deep Neural Network (4→8→8→4→3)")
+print("Pre-trained on 100 simulated samples")
+print("Activation: LeakyReLU + Tanh + Sigmoid")
+print("Training: 50 epochs with backpropagation")
 print("Optimized for MAXIMUM SPEED!")
 print("=================================")
