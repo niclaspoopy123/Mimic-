@@ -50,6 +50,9 @@ loadstring(game:HttpGet('https://raw.githubusercontent.com/niclaspoopy123/Mimic-
 - **⚡ Start Mimic**: Toggle to start/stop mimicking
 - **🔮 Prediction**: Enable kinematic prediction for better accuracy
 - **Prediction Factor**: Adjust prediction strength (0-0.5)
+  - ⚠️ **Recommended range: 0.08-0.35** for stable movement
+  - Values ≥0.40 may cause teleporting and are automatically capped
+  - Higher values work better with high FPS (>50)
 
 ### Combat Features
 - **Anti-Stun**: Automatically prevents stun states
@@ -99,6 +102,13 @@ The script includes an enhanced deep feedforward neural network for automatic pa
 Predicted Position = Current Position + Velocity × Time + 0.5 × Acceleration × Time²
 ```
 
+**Enhanced Safety Features:**
+- Dynamic bounds checking for prediction factors ≥0.45 (auto-clamped to 0.40)
+- Progressive damping for factors 0.35-0.45 (up to 30% reduction)
+- Velocity-based prediction reduction (extreme: >200, high: >100)
+- Dynamic maximum offset clamping (15-50 studs based on velocity)
+- Teleport prevention with position validation
+
 ### Update Rates
 - **Mimic Core**: RenderStepped (~60 FPS)
 - **Anti-Stun/Ragdoll/Launch**: Heartbeat (~60 FPS)
@@ -132,9 +142,14 @@ Settings are automatically saved using Rayfield's configuration system in:
 
 1. **Enable Anti-Features First**: Turn on anti-stun/ragdoll/launch before combat
 2. **Use Prediction**: Keep prediction enabled for better accuracy
-3. **Adjust Prediction Factor**: Lower for close combat (0.1), higher for ranged (0.3)
+3. **Adjust Prediction Factor**: 
+   - Low for close combat: **0.08-0.15**
+   - Medium for general use: **0.15-0.25**
+   - High for ranged (only with high FPS): **0.25-0.35**
+   - ⚠️ **Avoid values ≥0.40** to prevent teleporting
 4. **Lock-On for Combat**: Enable lock-on when engaging in direct combat
 5. **Camera Lock**: Use during combat for better target tracking
+6. **Monitor FPS**: Higher prediction values require stable 50+ FPS for smooth operation
 
 ## 🐛 Troubleshooting
 
