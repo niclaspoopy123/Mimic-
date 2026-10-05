@@ -67,8 +67,8 @@ local doLockOn, doCamLock, doMoveset, doRangeViz = false, false, false, false
 local doPrediction = true
 local doSmartPred = true
 local predFactor = 0.25
-local snapDist = 300
-local snapDistSq = 90000
+local snapDist = 5
+local snapDistSq = 25
 local followAlpha = 1
 local velMult = 1.0 
 local rangeDist = 50
@@ -717,9 +717,9 @@ MainTab:CreateSlider({
 
 MainTab:CreateSlider({
     Name = "🧲 Snap Distance (instant catch-up)",
-    Range = {50, 1000},
-    Increment = 10,
-    CurrentValue = 300,
+    Range = {1, 1000},
+    Increment = 1,
+    CurrentValue = 5,
     Flag = "SnapDist",
     Callback = function(v) snapDist = v; snapDistSq = v * v end
 })
