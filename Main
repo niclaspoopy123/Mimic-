@@ -67,8 +67,8 @@ local doLockOn, doCamLock, doMoveset, doRangeViz = false, false, false, false
 local doPrediction = true
 local doSmartPred = true
 local predFactor = 0.25
-local snapDist = 300
-local snapDistSq = 90000
+local snapDist = 1
+local snapDistSq = 1
 local followAlpha = 1
 local velMult = 1.0 
 local rangeDist = 50
@@ -279,7 +279,7 @@ end
 -- ═══════════════════════════════════════════
 -- THE SINGLE LOOP — STABLE MAX SPEED
 -- ═══════════════════════════════════════════
-local MOVE_INTERVAL_S = 0.015 -- V10: 15ms for frame-perfect combo replication
+local MOVE_INTERVAL_S = 0 -- no throttle: replicate every frame
 local RANGE_INTERVAL = 0.033
 
 -- V10: Pass dt directly from RenderStepped
@@ -327,13 +327,13 @@ local function mainLoop(dt)
             local s = 5000 / sqrt(amSq)
             ix, iy, iz = ix * s, iy * s, iz * s
         end
-        accX = accX + (ix - accX) * 0.25
-        accY = accY + (iy - accY) * 0.25
-        accZ = accZ + (iz - accZ) * 0.25
+        accX = accX + (ix - accX) * 0.6
+        accY = accY + (iy - accY) * 0.6
+        accZ = accZ + (iz - accZ) * 0.6
         prevVX, prevVY, prevVZ = vx, vy, vz
 
         -- V10: DYNAMIC SMOOTHING (Jitter filter adapts to target speed)
-        local smoothFactor = vmSq > 10000 and 0.8 or 0.5
+        local smoothFactor = min(0.98, 0.6 + vmSqrt * 0.004)
         sVX = sVX + (vx - sVX) * smoothFactor
         sVY = sVY + (vy - sVY) * smoothFactor
         sVZ = sVZ + (vz - sVZ) * smoothFactor
@@ -717,9 +717,9 @@ MainTab:CreateSlider({
 
 MainTab:CreateSlider({
     Name = "🧲 Snap Distance (instant catch-up)",
-    Range = {50, 1000},
-    Increment = 10,
-    CurrentValue = 300,
+    Range = {1, 1000},
+    Increment = 1,
+    CurrentValue = 1,
     Flag = "SnapDist",
     Callback = function(v) snapDist = v; snapDistSq = v * v end
 })
