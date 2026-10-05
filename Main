@@ -309,11 +309,6 @@ local function mainLoop(dt)
     if doMimic and have then
         local px, py, pz = tx, ty, tz
 
-        -- V10: Enforce Network Ownership if lost
-        if _lHRP.NetworkOwner ~= player then
-            pcall(function() _lHRP:SetNetworkOwner(player) end)
-        end
-
         local vel = _tHRP.AssemblyLinearVelocity
         local vx, vy, vz = vel.X, vel.Y, vel.Z
         local vmSq = vx * vx + vy * vy + vz * vz
@@ -603,7 +598,6 @@ function setMimicActive(v)
         doMimic = v
         if v then
             if lHum then lHum.PlatformStand = true end
-            pcall(function() lHRP:SetNetworkOwner(player) end) -- Force client ownership
             setNoClip(true) -- Auto NoClip
             prevVX, prevVY, prevVZ = 0, 0, 0
             accX, accY, accZ = 0, 0, 0
@@ -678,7 +672,7 @@ mimicToggle = MainTab:CreateToggle({
         end
         setMimicActive(v)
         if v then
-            Rayfield:Notify({ Title = "Mimic Active", Content = "Dash-Snap + Phantom NoClip + Net Override", Duration = 2, Image = 4483362458 })
+            Rayfield:Notify({ Title = "Mimic Active", Content = "Frame-by-frame sync + Dash-Snap + Phantom NoClip", Duration = 2, Image = 4483362458 })
         end
     end
 })
@@ -903,5 +897,4 @@ print("  NEW: O(1) Phantom NoClip (Cached descendants)")
 print("  NEW: Anti-CC Pop-up Override (Breaks ground locks instantly)")
 print("  NEW: 15ms Moveset Sync (Animator-based)")
 print("════════════════════════════════════════════")
-
 
